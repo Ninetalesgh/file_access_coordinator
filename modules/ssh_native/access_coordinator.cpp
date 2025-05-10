@@ -1,6 +1,11 @@
 #include "access_coordinator.h"
 
 
+#if defined (OS_WINDOWS)
+#define	S_IRUSR	0400
+#define	S_IWUSR	0200
+#endif
+
 void AccessCoordinator::_bind_methods()
 {
   ClassDB::bind_method(D_METHOD("init", "filename", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
