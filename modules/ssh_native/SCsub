@@ -10,8 +10,8 @@ is_windows = platform.system() == "Windows"
 is_linux = platform.system() == "Linux"
 
 if is_windows:
-	env.Append(CPPPATH=["/c//src/include"])
-	env.Append(LIBPATH=["/c/src/lib/libssh"])
+	env.Append(CPPPATH=["C:/src/include"])
+	env.Append(LIBPATH=["C:/src/lib/libssh"])
 	env.Append(LIBS=["ssh.lib"])
 elif is_linux:
 	env.Append(CPPPATH=["/usr/include"])
