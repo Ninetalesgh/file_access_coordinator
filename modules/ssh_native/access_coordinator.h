@@ -1,13 +1,8 @@
 #pragma once
 
 #include <core/object/ref_counted.h>
-#ifdef OS_WINDOWS
-  #include <C:/src/include/libssh/libssh.h>
-  #include <C:/src/include/libssh/sftp.h>
-#else
-  #include <libssh/libssh.h>
-  #include <libssh/sftp.h>
-#endif
+#include <libssh/libssh.h>
+#include <libssh/sftp.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,5 +68,4 @@ private:
 
   Vector<String> mReservedFileCache;
 };
-
 
