@@ -4,15 +4,56 @@
 
 void AccessCoordinator::_bind_methods()
 {
-  ClassDB::bind_method(D_METHOD("init"), &AccessCoordinator::init);
-//  ClassDB::bind_method(D_METHOD("init", "biome"), &AccessCoordinator::init);
+  ClassDB::bind_method(D_METHOD("init", "filename", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
 
+  ClassDB::bind_method(D_METHOD("reserve"), &AccessCoordinator::reserve);
+  ClassDB::bind_method(D_METHOD("download"), &AccessCoordinator::download);
+  ClassDB::bind_method(D_METHOD("upload"), &AccessCoordinator::upload);
+  ClassDB::bind_method(D_METHOD("release"), &AccessCoordinator::release);
 }
 
-void AccessCoordinator::init()
-{ 
-log_info("phew");
+void AccessCoordinator::reserve()
+{
+  log_info("reserve");
+}
 
+void AccessCoordinator::download()
+{
+  log_info("download");
+}
+
+void AccessCoordinator::upload()
+{
+  log_info("upload");
+}
+
+void AccessCoordinator::release()
+{
+  log_info("release");
+}
+
+
+void AccessCoordinator::init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
+{ 
+  if (mSession)
+  {
+    shutdown_session();
+  }
+
+  
+  mFilename = filename;
+  mUser = user;
+  mFilename = filename;
+  mUser = user;
+  mSshUsername = sshUsername;
+  mSshHostname = sshHostname;
+  mSshPassword = sshPassword;
+  mRemoteBaseDir = remoteBaseDir;
+  
+  if (SSH_OK != _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data()))
+  {
+    return;
+  }
 }
 
 constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }
@@ -246,14 +287,15 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
 {
   log_info("\n==============================================");
   log_info("----------------------------------------------");
-  log_info("--- Launching File Access Coordinator --------");
+  log_info("--- Launching Access Session -----------------");
   log_info("----------------------------------------------");
 
   mSession = ssh_new();
 
-  if (mSession == NULL)
+  if (mSession == nullptr)
   {
-    fprintf(stderr, "Failed to create ssh session\n");
+    log_error("- Failed to create ssh session.");
+
     return SSH_ERROR;
   }
 
@@ -263,16 +305,18 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
   int rc = ssh_connect(mSession);
   if (rc != SSH_OK)
   {
-    log_error("Connection failed: ", ssh_get_error(mSession));
+    log_error("- Connection failed: ", ssh_get_error(mSession));
     ssh_free(mSession);
+    mSession = nullptr;
     return SSH_ERROR;
   }
 
   rc = ssh_userauth_password(mSession, NULL, sshPassword);
   if (rc != SSH_AUTH_SUCCESS)
   {
-    log_error("Authentication failed: ", ssh_get_error(mSession));
+    log_error("- Authentication failed: ", ssh_get_error(mSession));
     ssh_free(mSession);
+    mSession = nullptr;
     return SSH_ERROR;
   }
   
@@ -295,7 +339,7 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
   return SSH_OK;
 }
 
-int AccessCoordinator::shutdown()
+int AccessCoordinator::shutdown_session()
 {
   ssh_disconnect(mSession);
   ssh_free(mSession);

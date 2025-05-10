@@ -19,12 +19,12 @@ protected:
 	static void _bind_methods();
 
 public: 
+  void init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir);
 
-//TODO Settings.. Volume.. etc
-
-
-
-  void init();
+  void reserve();
+  void download();
+  void upload();
+  void release();
 
 private:
   int request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
@@ -45,7 +45,7 @@ private:
 
 
   int _init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword);
-  int shutdown();
+  int shutdown_session();
   
   int upload_file(const char* localPath, char const* remotePath);
 
@@ -55,14 +55,14 @@ private:
   int release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions = false);
 
 
-  ssh_session mSession;
+  ssh_session mSession = nullptr;
   char mIpAddress[128];
-  char const* mUser;
-  char const* mSshHostname;
-  char const* mSshUsername;
-  char const* mPassword;
-  char const* mRemoteDir;
-  char const* mFilename;
+  String mFilename;
+  String mUser;
+  String mSshHostname;
+  String mSshUsername;
+  String mSshPassword;
+  String mRemoteBaseDir;
 };
 
 
