@@ -28,7 +28,10 @@ bool AccessCoordinator::download()
     return false;
   }
 
-    
+  if(SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
+  {
+    return false; 
+  }
 
   return SSH_OK == download_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
 }
