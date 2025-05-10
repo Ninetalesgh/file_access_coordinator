@@ -5,41 +5,58 @@
 void AccessCoordinator::_bind_methods()
 {
   ClassDB::bind_method(D_METHOD("init", "filename", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
-
   ClassDB::bind_method(D_METHOD("reserve"), &AccessCoordinator::reserve);
   ClassDB::bind_method(D_METHOD("download"), &AccessCoordinator::download);
   ClassDB::bind_method(D_METHOD("upload"), &AccessCoordinator::upload);
   ClassDB::bind_method(D_METHOD("release"), &AccessCoordinator::release);
 }
 
-void AccessCoordinator::reserve()
+bool AccessCoordinator::reserve()
 {
-  log_info("reserve");
+  if (!mSession)
+  {
+    log_error("SSH session not initialized, call init first.");
+    return false;
+  }
+  return SSH_OK == reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
 }
 
-void AccessCoordinator::download()
+bool AccessCoordinator::download()
 {
-  log_info("download");
+  if (!mSession)
+  {
+    log_error("SSH session not initialized, call init first.");
+    return false;
+  }
+  return SSH_OK == download_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
 }
 
-void AccessCoordinator::upload()
+bool AccessCoordinator::upload()
 {
-  log_info("upload");
+  if (!mSession)
+  {
+    log_error("SSH session not initialized, call init first.");
+    return false;
+  }
+  return SSH_OK == upload_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
 }
 
-void AccessCoordinator::release()
+bool AccessCoordinator::release()
 {
-  log_info("release");
+  if (!mSession)
+  {
+    log_error("SSH session not initialized, call init first.");
+    return false;
+  }
+  return SSH_OK == release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
 }
 
-
-void AccessCoordinator::init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
+bool AccessCoordinator::init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
 { 
   if (mSession)
   {
     shutdown_session();
   }
-
   
   mFilename = filename;
   mUser = user;
@@ -50,10 +67,12 @@ void AccessCoordinator::init(String filename, String user, String sshUsername, S
   mSshPassword = sshPassword;
   mRemoteBaseDir = remoteBaseDir;
   
-  if (SSH_OK != _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data()))
-  {
-    return;
-  }
+  char fullRemotePath[BSE_STACK_BUFFER_SMALL];
+  string_format(fullRemotePath, sizeof(fullRemotePath), mRemoteBaseDir.utf8().get_data(), "/", mFilename.utf8().get_data());
+
+  mFullRemotePath = mRemoteBaseDir;
+
+  return SSH_OK == _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data());
 }
 
 constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }

@@ -19,12 +19,11 @@ protected:
 	static void _bind_methods();
 
 public: 
-  void init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir);
-
-  void reserve();
-  void download();
-  void upload();
-  void release();
+  bool init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir);
+  bool reserve();
+  bool download();
+  bool upload();
+  bool release();
 
 private:
   int request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
@@ -63,6 +62,9 @@ private:
   String mSshUsername;
   String mSshPassword;
   String mRemoteBaseDir;
+
+  //Derived
+  String mFullRemotePath;
 };
 
 

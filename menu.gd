@@ -37,3 +37,16 @@ func reload_config():
     elif line.begins_with("remoteBaseDir="):
       remoteBaseDir = line.substr(14)
   pass
+
+
+func _on_download_button_pressed() -> void:
+  print("_on_download_button_pressed")
+
+func _on_upload_button_pressed() -> void:
+  print("_on_upload_button_pressed")
+
+func _on_release_pressed() -> void:
+  print("_on_release_pressed")
+
+func _on_reserve_pressed() -> void:
+  print("_on_reserve_pressed")
