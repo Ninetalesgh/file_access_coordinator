@@ -1,7 +1,7 @@
 #pragma once
 
 #include <core/object/ref_counted.h>
-#ifdef _WIN32
+#ifdef OS_WINDOWS
   #include <C:/src/include/libssh/libssh.h>
   #include <C:/src/include/libssh/sftp.h>
 #else
