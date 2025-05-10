@@ -89,26 +89,26 @@ namespace bse
 
     //forward trivial messages directly to the output
     void log( LogParameters const& parameters, char const* message ) 
-		{	
-			if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_INFO)
-			{
-				__print_line(message);
-			}
-			else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_VERBOSE)
-			{
-				__print_line(message);
-			}
-			else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_WARNING)
-			{
-				WARN_PRINT_ED(message);
-			}
-			else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_ERROR)
-			{
-				ERR_PRINT_ED(message);
-			}
-		}
+    {  
+      if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_INFO)
+      {
+        __print_line(message);
+      }
+      else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_VERBOSE)
+      {
+        __print_line(message);
+      }
+      else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_WARNING)
+      {
+        WARN_PRINT_ED(message);
+      }
+      else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_ERROR)
+      {
+        ERR_PRINT_ED(message);
+      }
+    }
 
-		void log( LogParameters const& parameters, char* message ) { log( parameters, (char const*)message ); }
+    void log( LogParameters const& parameters, char* message ) { log( parameters, (char const*)message ); }
 
     template<typename... Args> void log( LogParameters const& parameters, Args... args )
     {
@@ -116,8 +116,8 @@ namespace bse
       s32 bytesToWrite = string_format( debugBuffer, BSE_STACK_BUFFER_LARGE, args... ) - 1 /* ommit null */;
       if ( bytesToWrite > 0 )
       {
-				debugBuffer[bytesToWrite] = '\0';
-				log(parameters, (char const*)debugBuffer);
+        debugBuffer[bytesToWrite] = '\0';
+        log(parameters, (char const*)debugBuffer);
       }
     }
   };

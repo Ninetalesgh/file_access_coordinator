@@ -1,21 +1,20 @@
 #include "access_coordinator.h"
 
 
-
 void AccessCoordinator::_bind_methods()
 {
   ClassDB::bind_method(D_METHOD("init", "filename", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
   ClassDB::bind_method(D_METHOD("reserve"), &AccessCoordinator::reserve);
   ClassDB::bind_method(D_METHOD("download"), &AccessCoordinator::download);
   ClassDB::bind_method(D_METHOD("upload"), &AccessCoordinator::upload);
-  ClassDB::bind_method(D_METHOD("release"), &AccessCoordinator::release);
+  ClassDB::bind_method(D_METHOD("release", "overridePermission"), &AccessCoordinator::release);
 }
 
 bool AccessCoordinator::reserve()
 {
   if (!mSession)
   {
-    log_error("SSH session not initialized, call init first.");
+    log_error("Error: SSH session not initialized, call init first.");
     return false;
   }
   return SSH_OK == reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
@@ -25,9 +24,12 @@ bool AccessCoordinator::download()
 {
   if (!mSession)
   {
-    log_error("SSH session not initialized, call init first.");
+    log_error("Error: SSH session not initialized, call init first.");
     return false;
   }
+
+    
+
   return SSH_OK == download_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
 }
 
@@ -35,20 +37,26 @@ bool AccessCoordinator::upload()
 {
   if (!mSession)
   {
-    log_error("SSH session not initialized, call init first.");
+    log_error("Error: SSH session not initialized, call init first.");
     return false;
   }
+
+  if(SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
+  {
+    return false; 
+  }
+
   return SSH_OK == upload_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
 }
 
-bool AccessCoordinator::release()
+bool AccessCoordinator::release(bool overridePermission)
 {
   if (!mSession)
   {
     log_error("SSH session not initialized, call init first.");
     return false;
   }
-  return SSH_OK == release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
+  return SSH_OK == release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, overridePermission);
 }
 
 bool AccessCoordinator::init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
@@ -69,8 +77,7 @@ bool AccessCoordinator::init(String filename, String user, String sshUsername, S
   
   char fullRemotePath[BSE_STACK_BUFFER_SMALL];
   string_format(fullRemotePath, sizeof(fullRemotePath), mRemoteBaseDir.utf8().get_data(), "/", mFilename.utf8().get_data());
-
-  mFullRemotePath = mRemoteBaseDir;
+  mFullRemotePath = fullRemotePath;
 
   return SSH_OK == _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data());
 }
@@ -105,15 +112,26 @@ int AccessCoordinator::request_exec(char const* request, char* buffer, int buffe
 
   int bytesRead;
 
-  while ((bytesRead = ssh_channel_read(channel, buffer, bufferSize, 1)) > 0) 
+  char* ptr = buffer;
+  int sizeLeft = bufferSize - 1;
+
+  if(sizeLeft > 0) ptr[0] = '\0';
+
+  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 1)) > 0) 
   {
-    if (outputToStandardOut) fwrite(buffer, 1, bytesRead, stderr);
+    if (outputToStandardOut) fwrite(ptr, 1, bytesRead, stderr);
+    ptr += bytesRead;
+    sizeLeft -= bytesRead;
   }
 
-  while ((bytesRead = ssh_channel_read(channel, buffer, bufferSize, 0)) > 0) 
+  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 0)) > 0) 
   {
-    if (outputToStandardOut) fwrite(buffer, 1, bytesRead, stdout);
+    if (outputToStandardOut) fwrite(ptr, 1, bytesRead, stdout);
+    ptr += bytesRead;
+    sizeLeft -= bytesRead;
   }
+
+  if ( sizeLeft < bufferSize ) ptr[0] = '\0';
 
   ssh_channel_send_eof(channel);
   ssh_channel_close(channel);
@@ -125,6 +143,7 @@ int AccessCoordinator::request_exec(char const* request, char* buffer, int buffe
 int AccessCoordinator::request_exec(char const* request)
 {
   char buffer[256];
+  buffer[0] = '\0';
   return request_exec(request, buffer, sizeof(buffer));
 }
 
@@ -181,7 +200,6 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
 
-  log_info(remotePath);
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
   request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   
@@ -367,48 +385,51 @@ int AccessCoordinator::shutdown_session()
 
 int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp)
 {
+  if (mReservedFileCache.find(filename))
+  {
+    return SSH_OK;
+  }
+
   log_info("\n==============================================");
   log_info("----------------------------------------------");
   log_info("--- Reserving File ---------------------------");
   log_info("----------------------------------------------");
   log_info("- Attempting to reserve '", filename, "' for user '", user, "' with ip '", myIp, "'");
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
-  stringFormatBuffer[0] = '\0';
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
-
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
   // With 'examplefile' this will create an 'examplefilereservation' and enter the username and ip to reserve.
   // If 'examplefile' has write permission and 'examplefilereservation' is empty, we can reserve it.
-
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
                " && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
-                "then echo \"", user, " ", myIp ,"\" > '_", filename,"reservation'; else cat '_", filename, "reservation'; fi");
-
+                "then echo \"", user, " ", myIp ,"\" > '_", filename,"reservation'; fi");
   request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
-
-  responseBuffer[0] = '\0';
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
                "' && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
-               "then chmod -w '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; else echo \"- File '", filename, "' is already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+               "then chmod -w '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
+  responseBuffer[0] = '\0';
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  log_info(responseBuffer);
 
   log_info("----------------------------------------------");
   log_info("==============================================\n");
 
-  return string_begins_with(responseBuffer, "- Suc") ? SSH_OK : SSH_ERROR; 
+  return string_begins_with(responseBuffer, "- C") ? SSH_ERROR : SSH_OK;
 }
 
 int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions)
 {
+  int cached = mReservedFileCache.find(filename);
+  if (cached > 0) mReservedFileCache.remove_at(cached);
+
   log_info("\n==============================================");
   log_info("----------------------------------------------");
   log_info("--- Releasing File ---------------------------");
   log_info("----------------------------------------------");
-
-
 
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
   stringFormatBuffer[0] = '\0';
@@ -430,7 +451,8 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
                "then chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
   }
 
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  log_info(responseBuffer);
 
   log_info("----------------------------------------------");
   log_info("==============================================\n");
