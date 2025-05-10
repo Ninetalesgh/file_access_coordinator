@@ -1,7 +1,7 @@
 #include "access_coordinator.h"
 
 
-#if defined (OS_WINDOWS)
+#ifndef S_IRUSR
 #define	S_IRUSR	0400
 #define	S_IWUSR	0200
 #endif
