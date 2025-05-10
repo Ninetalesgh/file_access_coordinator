@@ -1,0 +1,376 @@
+#include "access_coordinator.h"
+
+
+
+void AccessCoordinator::_bind_methods()
+{
+  ClassDB::bind_method(D_METHOD("init"), &AccessCoordinator::init);
+//  ClassDB::bind_method(D_METHOD("init", "biome"), &AccessCoordinator::init);
+
+}
+
+void AccessCoordinator::init()
+{ 
+log_info("phew");
+
+}
+
+constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }
+
+int AccessCoordinator::request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut)
+{
+  ssh_channel channel = ssh_channel_new(mSession);
+
+  if (channel == NULL)
+  {
+    fprintf(stderr, "Failed to create channel.");
+    return SSH_ERROR;
+  }
+
+  int rc = ssh_channel_open_session(channel);
+  if (rc != SSH_OK)
+  {
+    ssh_channel_free(channel);
+    return SSH_ERROR;
+  }
+
+  rc = ssh_channel_request_exec(channel, request); 
+  if (rc != SSH_OK)
+  {
+    log_error("Error on request: ", request); 
+    ssh_channel_close(channel);
+    ssh_channel_free(channel);
+    return SSH_ERROR;
+  }
+
+  int bytesRead;
+
+  while ((bytesRead = ssh_channel_read(channel, buffer, bufferSize, 1)) > 0) 
+  {
+    if (outputToStandardOut) fwrite(buffer, 1, bytesRead, stderr);
+  }
+
+  while ((bytesRead = ssh_channel_read(channel, buffer, bufferSize, 0)) > 0) 
+  {
+    if (outputToStandardOut) fwrite(buffer, 1, bytesRead, stdout);
+  }
+
+  ssh_channel_send_eof(channel);
+  ssh_channel_close(channel);
+  ssh_channel_free(channel);
+
+  return SSH_OK;
+}
+
+int AccessCoordinator::request_exec(char const* request)
+{
+  char buffer[256];
+  return request_exec(request, buffer, sizeof(buffer));
+}
+
+int AccessCoordinator::upload_file(const char* localPath, char const* remotePath)
+{
+  log_info("\n==============================================");
+  log_info("----------------------------------------------");
+  log_info("--- Uploading File ---------------------------");
+  log_info("----------------------------------------------");
+
+  log_info("- Uploading '", localPath, "' as '", remotePath, "'");
+
+  sftp_session sftp = sftp_new(mSession);
+
+  if (sftp == NULL)
+  {
+    log_error("- Error creating SFTP session: ", ssh_get_error(mSession));
+    return SSH_ERROR;
+  }
+
+  if (sftp_init(sftp) != SSH_OK)
+  {
+    log_error("- Error initializing SCP: ", ssh_get_error(mSession));
+    sftp_free(sftp);
+    return SSH_ERROR;
+  }
+
+  FILE* localFile = fopen(localPath, "rb");
+  if (!localFile)
+  {
+    log_error("- Error opening local file: ", localPath);
+    sftp_free(sftp);
+    return SSH_ERROR;
+  }
+
+  sftp_file remoteFile = sftp_open(sftp, remotePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+  if (remoteFile == NULL)
+  {
+    log_error("- Error opening remote file: ", ssh_get_error(mSession));
+  }
+
+  char buffer[4096];
+  int bytesRead;
+  while ((bytesRead = fread(buffer,1, sizeof(buffer), localFile)) > 0)
+  {
+    if (sftp_write(remoteFile, buffer, bytesRead) != bytesRead)
+    {
+      log_error("- Error while writing remote file: ", ssh_get_error(mSession));
+      break;
+    }
+  }
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  log_info(remotePath);
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  
+  int remoteFileSize;
+  string_parse_value(responseBuffer, &remoteFileSize);
+
+  fseek(localFile, 0, SEEK_END);
+  s64 localFileSize = ftell(localFile);
+
+  int result;
+  if (s64(remoteFileSize) == localFileSize)
+  {
+    log_info("- Success!");
+    log_info("- Uploaded size: ", as_megabytes(localFileSize), " MB");
+    result = SSH_OK;
+  }
+  else
+  {
+    log_error("- Error while uploading, local file is ", localFileSize, " bytes large while the remote file is ", remoteFileSize, " bytes large.");
+    result = SSH_ERROR;
+  }
+
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+
+  sftp_close(remoteFile);
+  fclose(localFile);
+  sftp_free(sftp);
+  return result;
+}
+
+int AccessCoordinator::download_file(char const* localPath, char const* remotePath)
+{
+  log_info("\n==============================================");
+  log_info("----------------------------------------------");
+  log_info("--- Downloading File -------------------------");
+  log_info("----------------------------------------------");
+  
+  log_info("- Downloading '", remotePath, "' as '", localPath, "'");
+
+  sftp_session sftp = sftp_new(mSession);
+  if (sftp == NULL)
+  {
+    log_error("- Error creating SFTP session: ", ssh_get_error(mSession));
+    return SSH_ERROR;
+  }
+
+  if (sftp_init(sftp) != SSH_OK)
+  {
+    log_error("- Error initializing SCP: ", ssh_get_error(mSession));
+    sftp_free(sftp);
+    return SSH_ERROR;
+  }
+  
+  sftp_file remoteFile = sftp_open(sftp, remotePath, O_RDONLY, 0);
+  if (remoteFile == NULL)
+  {
+    log_error("- Error opening remote file: ", ssh_get_error(mSession));
+    sftp_free(sftp);
+    return SSH_ERROR;
+  }
+
+  FILE* localFile = fopen(localPath, "wb");
+  if (!localFile)
+  {
+    log_error("- Error opening local file: ", localPath);
+    sftp_close(remoteFile);
+    sftp_free(sftp);
+    return SSH_ERROR;
+  }
+
+  char buffer[4096];
+  int bytesRead;
+  while ((bytesRead = sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
+  {
+    if (fwrite(buffer, 1, bytesRead, localFile) != (size_t)bytesRead)
+    {
+      log_error("- Error writing local file: ", localPath);
+      break;
+    }
+  }
+
+  if (bytesRead < 0)
+  {
+    log_error("- Error while reading remote file: ", ssh_get_error(mSession));
+  }
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  
+  int remoteFileSize;
+  string_parse_value(responseBuffer, &remoteFileSize);
+
+  fseek(localFile, 0, SEEK_END);
+  s64 localFileSize = ftell(localFile);
+
+  if (s64(remoteFileSize) == localFileSize)
+  {
+    log_info("- Success!");
+    log_info("- Downloaded size: ", as_megabytes(localFileSize), " MB");
+  }
+  else
+  {
+    log_error("- Error while downloading, local file is ", localFileSize, " bytes large while the remote file is ", remoteFileSize, " bytes large.");
+    bytesRead = -1;
+  }
+
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+
+  fclose(localFile);
+  sftp_close(remoteFile);
+  sftp_free(sftp);
+  return bytesRead < 0 ? SSH_ERROR : SSH_OK;
+}
+
+int AccessCoordinator::_init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword)
+{
+  log_info("\n==============================================");
+  log_info("----------------------------------------------");
+  log_info("--- Launching File Access Coordinator --------");
+  log_info("----------------------------------------------");
+
+  mSession = ssh_new();
+
+  if (mSession == NULL)
+  {
+    fprintf(stderr, "Failed to create ssh session\n");
+    return SSH_ERROR;
+  }
+
+  ssh_options_set(mSession, SSH_OPTIONS_HOST, sshHost);
+  ssh_options_set(mSession, SSH_OPTIONS_USER, sshUser);
+
+  int rc = ssh_connect(mSession);
+  if (rc != SSH_OK)
+  {
+    log_error("Connection failed: ", ssh_get_error(mSession));
+    ssh_free(mSession);
+    return SSH_ERROR;
+  }
+
+  rc = ssh_userauth_password(mSession, NULL, sshPassword);
+  if (rc != SSH_AUTH_SUCCESS)
+  {
+    log_error("Authentication failed: ", ssh_get_error(mSession));
+    ssh_free(mSession);
+    return SSH_ERROR;
+  }
+  
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  char responseBuffer[256];
+  responseBuffer[0] = '\0';
+  
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo $SSH_CONNECTION | awk '{print $1}'");
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  string_copy(mIpAddress, responseBuffer, sizeof(mIpAddress));
+  string_replace_char(mIpAddress,'\n','\0');
+
+  log_info("- Connected to '", sshUser, "@", sshHost, "'");
+  log_info("- User: ", user);
+  log_info("- Local IP: ", mIpAddress);
+
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+
+  return SSH_OK;
+}
+
+int AccessCoordinator::shutdown()
+{
+  ssh_disconnect(mSession);
+  ssh_free(mSession);
+  return SSH_OK;
+}
+
+int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp)
+{
+  log_info("\n==============================================");
+  log_info("----------------------------------------------");
+  log_info("--- Reserving File ---------------------------");
+  log_info("----------------------------------------------");
+  log_info("- Attempting to reserve '", filename, "' for user '", user, "' with ip '", myIp, "'");
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  // With 'examplefile' this will create an 'examplefilereservation' and enter the username and ip to reserve.
+  // If 'examplefile' has write permission and 'examplefilereservation' is empty, we can reserve it.
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+               "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
+               " && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
+                "then echo \"", user, " ", myIp ,"\" > '_", filename,"reservation'; else cat '_", filename, "reservation'; fi");
+
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+
+  responseBuffer[0] = '\0';
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+               "cd '", remoteBaseDir,
+               "' && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
+               "then chmod -w '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; else echo \"- File '", filename, "' is already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+
+  return string_begins_with(responseBuffer, "- Suc") ? SSH_OK : SSH_ERROR; 
+}
+
+int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions)
+{
+  log_info("\n==============================================");
+  log_info("----------------------------------------------");
+  log_info("--- Releasing File ---------------------------");
+  log_info("----------------------------------------------");
+
+
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  if (overridePermissions)
+  {
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+               "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
+               " && chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\""); 
+  }
+  else
+  {
+    log_info("- Attempting to release '", filename, "' from user '", user, "' with ip '", myIp, "'");
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+               "cd '", remoteBaseDir,
+               "' && if grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
+               "then chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
+  }
+
+  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+
+  return SSH_OK;
+}
