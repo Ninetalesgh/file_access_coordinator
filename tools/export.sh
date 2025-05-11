@@ -56,13 +56,13 @@ if [ "$CONFIG" = "debug" ]; then
 fi
 
 if [ "$PLATFORM" = "windows" ]; then
-	CUSTOM="Windows"
+	PRESET="Windows Desktop"
 	OUT_FILENAME="$OUT_FILENAME.exe"
 elif [ "$PLATFORM" = "linux" ]; then
-	CUSTOM="Linux"
+	PRESET="Linux"
 fi
 
-"$EDITOR_PATH" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
+"$EDITOR_PATH" --export-$CONFIG "$PRESET" "$EXPORT_DIR/$OUT_FILENAME"
 
 
 
