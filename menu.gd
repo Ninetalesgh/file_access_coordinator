@@ -83,7 +83,7 @@ func load_config():
 
   var configText = file.get_as_text()
   if set_config(configText):
-    _log("- Successfully loaded 'access.config'.")
+    _log("- Successfully loaded 'access.config'.\n")
   else:
     var defaultFile = FileAccess.open(defaultConfigPath, FileAccess.READ)
     if defaultFile:
