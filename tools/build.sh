@@ -2,7 +2,6 @@
 #!/bin/bash
 
 TARGET="$1"
-OUT_FILENAME="fac"
 DEBUG_SYMBOLS="no"
 OPTIMIZE="auto"
 
@@ -24,7 +23,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT_SOURCE_DIR="$(cd "$PROJECT_DIR/../godot" && pwd)"
 
 MODULE_ROOT_DIR="$PROJECT_DIR/modules"
-
+BIN_DIR="$PROJECT_DIR/bin"
 
 CUSTOM_MODULE_DIRS=()
 for dir in $MODULE_ROOT_DIR/*/; do
@@ -34,7 +33,7 @@ done
 
 echo ""
 echo "========================================="
-echo "--- Building Mythmakers -----------------"
+echo "--- Building File Access Coordinator ----"
 echo "-----------------------------------------"
 echo "- Expected Project Source: $PROJECT_DIR"
 echo "- Expected Godot Source: $GODOT_SOURCE_DIR"
@@ -48,8 +47,6 @@ echo "- Platform: $PLATFORM"
 echo "- Target: $TARGET" 
 echo "- Debug Symbols: $DEBUG_SYMBOLS" 
 echo "- Optimize: $OPTIMIZE" 
-echo "-----------------------------------------"
-echo "--- Pushing godot source dir ------------"
 pushd $GODOT_SOURCE_DIR
 echo "-----------------------------------------"
 end_cosmetic_underline(){
@@ -64,39 +61,38 @@ scons platform=$PLATFORM target=$TARGET debug_symbols=$DEBUG_SYMBOLS custom_modu
 status=$?
 popd
 
+if [ $status -ne 0 ]; then
+	echo "-----------------------------------------"
+	echo "- Build Errors, exiting."
+	end_cosmetic_underline
+	exit 1
+fi
+
 CONFIGURATION=""
-GODOT_VERSION="4.4.2rc"
 ARCH=x86_64
 
+OUT_FILENAME=""
 if [ "$TARGET" = "editor" ]; then 
 	OUT_FILENAME="editor"; 
 else 
-	if [ "$TARGET" = "template_release" ]; then
-		CONFIGURATION="release"
-	elif [ "$TARGET" = "template_debug" ]; then
-		CONFIGURATION="debug"
-	fi
-	OUT_FILENAME="${PLATFORM}_${CONFIGURATION}.$ARCH"
+	OUT_FILENAME="godot.${PLATFORM}.${TARGET}.$ARCH"
 fi
 
-if [ "$PLATFORM" = "linux" ]; then 
-	PLATFORM="linuxbsd"
+PLATFORM_EXTRA="$PLATFORM"
+if [ "$PLATFORM_EXTRA" = "linux" ]; then 
+	PLATFORM_EXTRA="linuxbsd"
+elif [ "$PLATFORM_EXTRA" = "windows" ]; then
+	OUT_FILENAME="$OUT_FILENAME.exe"
 fi
 
 mkdir -p bin
 echo "-----------------------------------------"
 
-if [ -e "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM.$TARGET.$ARCH" ]; then
-	echo "- Writing result to: $PROJECT_DIR/$OUT_FILENAME"
-	cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM.$TARGET.$ARCH" "$PROJECT_DIR/$OUT_FILENAME"
+if [ -e "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" ]; then
+	echo "- Result: $EXPORT_DIR/$OUT_FILENAME"
+	cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" "$EXPORT_DIR/$OUT_FILENAME"
 else
 	echo "- Error: No output binary was created to copy into the project directory."
 fi
 
-if [ $status -ne 0 ]; then
-	echo "-----------------------------------------"
-	echo "- Error building, aborting."
-	end_cosmetic_underline
-	exit 1
-fi
 end_cosmetic_underline

@@ -1,4 +1,4 @@
 #!/bin/bash
 
-bash build.sh editor
+bash "$(dirname "${BASH_SOURCE[0]}")/build.sh" editor
 

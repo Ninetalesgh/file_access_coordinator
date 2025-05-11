@@ -1,3 +1,5 @@
 #!/bin/bash
 
-bash build.sh template_release
+
+bash "$(dirname "${BASH_SOURCE[0]}")/build.sh" template_release
+
