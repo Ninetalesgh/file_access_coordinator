@@ -9,11 +9,13 @@ if [ "$CONFIG" = "" ]; then
 	CONFIG="release"
 fi
 
+BINARY_POSTFIX=""
 PLATFORM=""
 if [[ "$(uname)" =~ ^Linux$ ]]; then
 	PLATFORM="linux"
 else
 	PLATFORM="windows"
+	BINARY_POSTFIX=".exe"
 fi
 
 ARCH=x86_64
@@ -25,9 +27,12 @@ exit_early(){
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-EDITOR_DIR="$PROJECT_DIR/editor"
+echo "$PROJECT_DIR"
+
+
+EDITOR_DIR="$PROJECT_DIR/editor$BINARY_POSTFIX"
 EXPORT_DIR="$PROJECT_DIR/export"
-TEMPLATE_DIR="$PROJECT_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH"
+TEMPLATE_DIR="$PROJECT_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH$BINARY_POSTFIX"
 
 if [ ! -e "$EDITOR_DIR" ]; then
 	bash build_editor.sh
@@ -58,7 +63,7 @@ elif [ "$PLATFORM" = "linux" ]; then
 	CUSTOM="Linux"
 fi
 
-"./$EDITOR_DIR" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
+".$EDITOR_DIR" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
 
 
 

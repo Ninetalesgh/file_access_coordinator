@@ -89,8 +89,8 @@ mkdir -p bin
 echo "-----------------------------------------"
 
 if [ -e "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" ]; then
-	echo "- Result: $EXPORT_DIR/$OUT_FILENAME"
-	cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" "$EXPORT_DIR/$OUT_FILENAME"
+	echo "- Result: $BIN_DIR/$OUT_FILENAME"
+	cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" "$BIN_DIR/$OUT_FILENAME"
 else
 	echo "- Error: No output binary was created to copy into the project directory."
 fi
