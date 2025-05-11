@@ -28,11 +28,12 @@ exit_early(){
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$PROJECT_DIR/bin"
 
-EDITOR_DIR="$BIN_DIR/editor$BINARY_POSTFIX"
+EDITOR_PATH="$BIN_DIR/editor$BINARY_POSTFIX"
 EXPORT_DIR="$PROJECT_DIR/export"
-TEMPLATE_DIR="$BIN_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH$BINARY_POSTFIX"
+TEMPLATE_PATH="$BIN_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH$BINARY_POSTFIX"
 
-if [ ! -e "$EDITOR_DIR" ]; then
+status=0
+if [ ! -f "$EDITOR_PATH" ]; then
 	bash build_editor.sh
 	status=$?
 fi
@@ -41,7 +42,7 @@ if [ $status -ne 0 ]; then
 	exit_early
 fi
 
-if [ ! -e "$TEMPLATE_DIR" ]; then
+if [ ! -f "$TEMPLATE_PATH" ]; then
 	bash build_template_$CONFIG.sh
 	status=$?
 fi
@@ -61,7 +62,7 @@ elif [ "$PLATFORM" = "linux" ]; then
 	CUSTOM="Linux"
 fi
 
-"$EDITOR_DIR" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
+"$EDITOR_PATH" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
 
 
 
