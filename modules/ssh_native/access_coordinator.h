@@ -51,7 +51,7 @@ private:
     return SSH_ERROR;
   }
 
-
+  int log_section_exit_return_error();
   int _init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword);
   int shutdown_session();
   

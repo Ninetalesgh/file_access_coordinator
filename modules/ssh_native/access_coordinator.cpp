@@ -239,6 +239,13 @@ int AccessCoordinator::request_exec(char const* request)
   return request_exec(request, buffer, sizeof(buffer));
 }
 
+int AccessCoordinator::log_section_exit_return_error()
+{
+  log_info("----------------------------------------------");
+  log_info("==============================================\n");
+  return SSH_ERROR;
+}
+
 int AccessCoordinator::upload_file(const char* localPath, char const* remotePath)
 {
   log_info("\n==============================================");
@@ -253,14 +260,14 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   if (sftp == NULL)
   {
     log_error("- Error creating SFTP session: ", ssh_get_error(mSession));
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   if (sftp_init(sftp) != SSH_OK)
   {
     log_error("- Error initializing SCP: ", ssh_get_error(mSession));
     sftp_free(sftp);
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   FILE* localFile = fopen(localPath, "rb");
@@ -268,13 +275,15 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   {
     log_error("- Error opening local file: ", localPath);
     sftp_free(sftp);
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   sftp_file remoteFile = sftp_open(sftp, remotePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
   if (remoteFile == NULL)
   {
     log_error("- Error opening remote file: ", ssh_get_error(mSession));
+    sftp_free(sftp);
+    return log_section_exit_return_error();
   }
 
   char buffer[4096];
@@ -336,14 +345,14 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   if (sftp == NULL)
   {
     log_error("- Error creating SFTP session: ", ssh_get_error(mSession));
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   if (sftp_init(sftp) != SSH_OK)
   {
     log_error("- Error initializing SCP: ", ssh_get_error(mSession));
     sftp_free(sftp);
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
   
   sftp_file remoteFile = sftp_open(sftp, remotePath, O_RDONLY, 0);
@@ -351,7 +360,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   {
     log_error("- Error opening remote file: ", ssh_get_error(mSession));
     sftp_free(sftp);
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   FILE* localFile = fopen(localPath, "wb");
@@ -360,7 +369,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     log_error("- Error opening local file: ", localPath);
     sftp_close(remoteFile);
     sftp_free(sftp);
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   char buffer[4096];
@@ -424,8 +433,7 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
   if (mSession == nullptr)
   {
     log_error("- Failed to create ssh session.");
-
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   ssh_options_set(mSession, SSH_OPTIONS_HOST, sshHost);
@@ -437,7 +445,7 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
     log_error("- Connection failed: ", ssh_get_error(mSession));
     ssh_free(mSession);
     mSession = nullptr;
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
 
   rc = ssh_userauth_password(mSession, NULL, sshPassword);
@@ -446,7 +454,7 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
     log_error("- Authentication failed: ", ssh_get_error(mSession));
     ssh_free(mSession);
     mSession = nullptr;
-    return SSH_ERROR;
+    return log_section_exit_return_error();
   }
   
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];

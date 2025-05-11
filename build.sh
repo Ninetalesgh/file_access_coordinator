@@ -67,7 +67,7 @@ GODOT_VERSION="4.4.2rc"
 ARCH=x86_64
 
 if [ "$TARGET" = "editor" ]; then 
-	OUT_FILENAME="godot_editor"; 
+	OUT_FILENAME="editor"; 
 else 
 	if [ "$TARGET" = "template_release" ]; then
 		CONFIGURATION="release"
