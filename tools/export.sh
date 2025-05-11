@@ -32,7 +32,7 @@ EDITOR_DIR="$BIN_DIR/editor$BINARY_POSTFIX"
 EXPORT_DIR="$PROJECT_DIR/export"
 TEMPLATE_DIR="$BIN_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH$BINARY_POSTFIX"
 
-if [ ! -f "$EDITOR_DIR" ]; then
+if [ ! -e "$EDITOR_DIR" ]; then
 	bash build_editor.sh
 	status=$?
 fi
@@ -41,7 +41,7 @@ if [ $status -ne 0 ]; then
 	exit_early
 fi
 
-if [ ! -f "$TEMPLATE_DIR" ]; then
+if [ ! -e "$TEMPLATE_DIR" ]; then
 	bash build_template_$CONFIG.sh
 	status=$?
 fi
