@@ -1,4 +1,5 @@
 bin/
+export/
 .godot/
 modules/ssh_native/__pycache__
 modules/ssh_native/register_types.linux*
