@@ -34,6 +34,7 @@ EDITOR_DIR="$PROJECT_DIR/editor$BINARY_POSTFIX"
 EXPORT_DIR="$PROJECT_DIR/export"
 TEMPLATE_DIR="$PROJECT_DIR/godot.${PLATFORM}.template_$CONFIG.$ARCH$BINARY_POSTFIX"
 
+echo $EDITOR_DIR
 if [ ! -e "$EDITOR_DIR" ]; then
 	bash build_editor.sh
 	status=$?
@@ -63,7 +64,7 @@ elif [ "$PLATFORM" = "linux" ]; then
 	CUSTOM="Linux"
 fi
 
-".$EDITOR_DIR" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
+"$EDITOR_DIR" --export-$CONFIG "$CUSTOM" "$EXPORT_DIR/$OUT_FILENAME"
 
 
 
