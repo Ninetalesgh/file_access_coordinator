@@ -1,6 +1,8 @@
 #pragma once
 
 #include <core/object/ref_counted.h>
+#include <scene/gui/dialogs.h>
+
 #include <libssh/libssh.h>
 #include <libssh/sftp.h>
 
@@ -9,22 +11,30 @@
 #include <fcntl.h>
 
 #include "string_format.h"
-#include "debug.h"
 
-class AccessCoordinator : public Object {
-	GDCLASS(AccessCoordinator, Object)
+class AccessCoordinator : public Node {
+	GDCLASS(AccessCoordinator, Node)
 
 protected:
 	static void _bind_methods();
 
 public: 
-  bool init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir);
+  bool init(String filepath, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir);
   bool reserve();
   bool download();
   bool upload();
   bool release(bool overridePermissions = false);
 
+  String fetch_output();
+  String output;
+
+void on_download_dialog_confirm();
+void on_upload_dialog_confirm();
+void on_force_release_dialog_confirm();
+
 private:
+  void show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)());
+
   int request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
   int request_exec(char const* request);
 
@@ -38,7 +48,7 @@ private:
       return request_exec((char const*)debugBuffer);
     }
 
-  return SSH_ERROR;
+    return SSH_ERROR;
   }
 
 
@@ -54,9 +64,7 @@ private:
   int release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions = false);
 
 
-  ssh_session mSession = nullptr;
-  char mIpAddress[128];
-  String mFilename;
+  String mFullLocalPath;
   String mUser;
   String mSshHostname;
   String mSshUsername;
@@ -64,8 +72,13 @@ private:
   String mRemoteBaseDir;
 
   //Derived
+  char mIpAddress[128];
+  String mFilename;
   String mFullRemotePath;
 
+  //
+  ssh_session mSession = nullptr;
+  ConfirmationDialog* mConfirmationDialog = nullptr;
   Vector<String> mReservedFileCache;
 };
 

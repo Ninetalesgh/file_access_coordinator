@@ -1,13 +1,12 @@
 #!/bin/bash
 
-TARGET="editor"
+TARGET="template_release"
 DEBUG_SYMBOLS="no"
-OUT_FILENAME="fac"
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 GODOT_SOURCE_DIR="$SCRIPT_DIR/../godot"
-
 PLATFORM=""
+
 if [[ "$(uname)" =~ ^Linux$ ]]; then
 	PLATFORM="linux"
 else
@@ -51,14 +50,6 @@ echo "External modules expected at: " $SCRIPT_DIR
 scons platform=$PLATFORM target=$TARGET debug_symbols=$DEBUG_SYMBOLS custom_modules=$CUSTOM_MODULE_DIRS
 status=$?
 popd
-
-ARCH=x86_64
-if [ "$PLATFORM" = "linux" ]; then PLATFORM="linuxbsd"; fi
-if [ "$TARGET" = "editor" ]; then OUT_FILENAME="${OUT_FILENAME}_editor"; fi
-
-mkdir -p bin
-cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM.$TARGET.$ARCH" "bin/$OUT_FILENAME"
-
 if [ $status -ne 0 ]; then
 	echo "-----------------------------------------"
 	echo "- Error building, aborting."

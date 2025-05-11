@@ -1,48 +1,126 @@
-[gd_scene load_steps=2 format=3 uid="uid://b8i26satwraa7"]
+[gd_scene load_steps=3 format=3 uid="uid://b8i26satwraa7"]
 
 [ext_resource type="Script" uid="uid://kxmj0vroqjw3" path="res://menu.gd" id="1_lti8b"]
+[ext_resource type="FontFile" uid="uid://bea736pgabwp" path="res://Anonymous_Pro.ttf" id="2_ouk20"]
 
 [node name="Node2D" type="Node2D"]
 script = ExtResource("1_lti8b")
 
+[node name="Panel" type="Panel" parent="."]
+offset_left = -15.0
+offset_top = -11.0
+offset_right = 796.0
+offset_bottom = 614.0
+
+[node name="ScrollContainer" type="ScrollContainer" parent="."]
+offset_top = 152.0
+offset_right = 777.0
+offset_bottom = 599.0
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="output" type="TextEdit" parent="ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+clip_contents = false
+custom_minimum_size = Vector2(700, 400)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_readonly_color = Color(0.952941, 0.952941, 0.952941, 0.890196)
+theme_override_fonts/font = ExtResource("2_ouk20")
+editable = false
+
 [node name="Download" type="Button" parent="."]
-offset_right = 120.0
+offset_left = -1.0
+offset_right = 222.0
 offset_bottom = 43.0
 text = "Download"
 
 [node name="Upload" type="Button" parent="."]
-offset_top = 86.0
-offset_right = 120.0
-offset_bottom = 129.0
+offset_left = -1.0
+offset_top = 43.0
+offset_right = 222.0
+offset_bottom = 86.0
 text = "Upload"
 
 [node name="Reserve" type="Button" parent="."]
-offset_top = 43.0
-offset_right = 120.0
-offset_bottom = 86.0
+offset_left = 561.0
+offset_right = 783.0
+offset_bottom = 43.0
 text = "Reserve"
 
 [node name="Release" type="Button" parent="."]
-offset_top = 129.0
-offset_right = 120.0
-offset_bottom = 172.0
+offset_left = 561.0
+offset_top = 43.0
+offset_right = 783.0
+offset_bottom = 86.0
 text = "Release"
 
-[node name="TextEdit" type="TextEdit" parent="."]
-layout_direction = 3
-anchors_preset = 11
-anchor_left = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -721.0
-offset_top = 36.0
-offset_right = -314.0
-offset_bottom = 485.0
-grow_horizontal = 0
-grow_vertical = 2
-editable = false
+[node name="SaveConfig" type="Button" parent="."]
+offset_left = 657.0
+offset_top = 120.0
+offset_right = 776.0
+offset_bottom = 148.0
+theme_override_font_sizes/font_size = 14
+text = "Save Config"
+
+[node name="ForceRelease" type="Button" parent="."]
+offset_left = 657.0
+offset_top = 90.0
+offset_right = 776.0
+offset_bottom = 118.0
+theme_override_font_sizes/font_size = 14
+text = "Force Release"
+
+[node name="text_user" type="TextEdit" parent="."]
+unique_name_in_owner = true
+offset_left = 79.0
+offset_top = 90.0
+offset_right = 655.0
+offset_bottom = 121.0
+theme_override_font_sizes/font_size = 15
+
+[node name="text_filepath" type="TextEdit" parent="."]
+unique_name_in_owner = true
+offset_left = 79.0
+offset_top = 118.0
+offset_right = 655.0
+offset_bottom = 149.0
+theme_override_font_sizes/font_size = 15
+
+[node name="Label2" type="Label" parent="."]
+offset_left = 4.0
+offset_top = 94.0
+offset_right = 75.0
+offset_bottom = 119.0
+text = "User:"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Label" type="Label" parent="."]
+offset_left = 4.0
+offset_top = 118.0
+offset_right = 75.0
+offset_bottom = 148.0
+text = "Filepath:"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Title" type="Label" parent="."]
+offset_left = 261.0
+offset_top = 7.0
+offset_right = 523.0
+offset_bottom = 42.0
+theme_override_font_sizes/font_size = 20
+text = "File Access Coordinator"
+horizontal_alignment = 1
 
 [connection signal="pressed" from="Download" to="." method="_on_download_button_pressed"]
 [connection signal="pressed" from="Upload" to="." method="_on_upload_button_pressed"]
-[connection signal="pressed" from="Reserve" to="." method="_on_reserve_pressed"]
-[connection signal="pressed" from="Release" to="." method="_on_release_pressed"]
+[connection signal="pressed" from="Reserve" to="." method="_on_reserve_button_pressed"]
+[connection signal="pressed" from="Release" to="." method="_on_release_button_pressed"]
+[connection signal="pressed" from="SaveConfig" to="." method="_on_save_config_button_pressed"]
+[connection signal="pressed" from="ForceRelease" to="." method="_on_force_release_button_pressed"]

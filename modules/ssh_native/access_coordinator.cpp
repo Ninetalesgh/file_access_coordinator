@@ -1,5 +1,6 @@
 #include "access_coordinator.h"
 
+#include "debug.h"
 
 #ifndef S_IRUSR
 #define	S_IRUSR	0400
@@ -8,11 +9,20 @@
 
 void AccessCoordinator::_bind_methods()
 {
-  ClassDB::bind_method(D_METHOD("init", "filename", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
+  ClassDB::bind_method(D_METHOD("init", "filepath", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
   ClassDB::bind_method(D_METHOD("reserve"), &AccessCoordinator::reserve);
   ClassDB::bind_method(D_METHOD("download"), &AccessCoordinator::download);
   ClassDB::bind_method(D_METHOD("upload"), &AccessCoordinator::upload);
   ClassDB::bind_method(D_METHOD("release", "overridePermission"), &AccessCoordinator::release);
+  ClassDB::bind_method(D_METHOD("fetch_output"), &AccessCoordinator::fetch_output);
+}
+
+String AccessCoordinator::fetch_output()
+{
+  //This entire output forwarding thing is messy, but for the sake of this program and the time I want to put into it.. what can you do.
+  String result = output;
+  output = "";
+  return result;
 }
 
 bool AccessCoordinator::reserve()
@@ -22,6 +32,7 @@ bool AccessCoordinator::reserve()
     log_error("Error: SSH session not initialized, call init first.");
     return false;
   }
+
   return SSH_OK == reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
 }
 
@@ -38,7 +49,13 @@ bool AccessCoordinator::download()
     return false; 
   }
 
-  return SSH_OK == download_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "Confirm overwrite of local file '", mFullLocalPath.utf8().get_data(), "'?");
+  show_confirmation_dialog("Initiating Download", stringFormatBuffer, &AccessCoordinator::on_download_dialog_confirm);
+
+  return true;
 }
 
 bool AccessCoordinator::upload()
@@ -49,12 +66,20 @@ bool AccessCoordinator::upload()
     return false;
   }
 
-  if(SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+
+  if (mReservedFileCache.find(mFilename) != -1)
   {
-    return false; 
+    on_upload_dialog_confirm();
+  }
+  else
+  {
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "You did not reserve '", mFilename.utf8().get_data(), "' this session,\n are you sure you want to attempt to overwrite the file on the server?");
+    show_confirmation_dialog("Initiating Upload", stringFormatBuffer, &AccessCoordinator::on_upload_dialog_confirm);
   }
 
-  return SSH_OK == upload_file(mFilename.utf8().get_data(), mFullRemotePath.utf8().get_data());
+  return true;
 }
 
 bool AccessCoordinator::release(bool overridePermission)
@@ -64,19 +89,31 @@ bool AccessCoordinator::release(bool overridePermission)
     log_error("SSH session not initialized, call init first.");
     return false;
   }
-  return SSH_OK == release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, overridePermission);
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+
+  if (overridePermission)
+  {
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "Force release of remote file '", mFilename.utf8().get_data(), "'?\nThis will overwrite any existing reservation.");
+    show_confirmation_dialog("Force Release", stringFormatBuffer, &AccessCoordinator::on_force_release_dialog_confirm);
+    return true;
+  }
+  else
+  {
+    return SSH_OK == release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, false);
+  }
 }
 
-bool AccessCoordinator::init(String filename, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
+bool AccessCoordinator::init(String filepath, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
 { 
   if (mSession)
   {
     shutdown_session();
   }
   
-  mFilename = filename;
-  mUser = user;
-  mFilename = filename;
+  mFullLocalPath = filepath;
+  mFilename = mFullLocalPath.get_file();
   mUser = user;
   mSshUsername = sshUsername;
   mSshHostname = sshHostname;
@@ -89,6 +126,53 @@ bool AccessCoordinator::init(String filename, String user, String sshUsername, S
 
   return SSH_OK == _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data());
 }
+
+void AccessCoordinator::on_download_dialog_confirm()
+{
+  download_file(mFullLocalPath.utf8().get_data(), mFullRemotePath.utf8().get_data());
+}
+
+void AccessCoordinator::on_upload_dialog_confirm()
+{
+  if (SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
+  {
+    return; 
+  }
+
+  if (SSH_OK != upload_file(mFullLocalPath.utf8().get_data(), mFullRemotePath.utf8().get_data()))
+  {
+    return;
+  }
+
+  release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, false);
+}
+
+void AccessCoordinator::on_force_release_dialog_confirm()
+{
+  release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, true);
+}
+
+void AccessCoordinator::show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)())
+{
+  if (mConfirmationDialog)
+  {
+    mConfirmationDialog->queue_free();
+    mConfirmationDialog = nullptr;
+  }
+
+  mConfirmationDialog = memnew(ConfirmationDialog);
+  mConfirmationDialog->set_text(message);
+  mConfirmationDialog->set_title(title);
+  mConfirmationDialog->get_ok_button()->set_text("Yes");
+  mConfirmationDialog->get_cancel_button()->set_text("No");
+  mConfirmationDialog->connect("confirmed", callable_mp(this, on_confirm));
+
+  get_tree()->get_root()->add_child(mConfirmationDialog);
+
+  mConfirmationDialog->popup_centered();
+  mConfirmationDialog->show();
+}
+
 
 constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }
 
@@ -162,7 +246,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   log_info("--- Uploading File ---------------------------");
   log_info("----------------------------------------------");
 
-  log_info("- Uploading '", localPath, "' as '", remotePath, "'");
+  log_info("- Attempting to upload '", localPath, "' as '", remotePath, "'");
 
   sftp_session sftp = sftp_new(mSession);
 
@@ -246,7 +330,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   log_info("--- Downloading File -------------------------");
   log_info("----------------------------------------------");
   
-  log_info("- Downloading '", remotePath, "' as '", localPath, "'");
+  log_info("- Attempting to download '", remotePath, "' as '", localPath, "'");
 
   sftp_session sftp = sftp_new(mSession);
   if (sftp == NULL)
@@ -393,7 +477,7 @@ int AccessCoordinator::shutdown_session()
 
 int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp)
 {
-  if (mReservedFileCache.find(filename))
+  if (mReservedFileCache.find(filename) != -1)
   {
     return SSH_OK;
   }
@@ -426,13 +510,20 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   log_info("----------------------------------------------");
   log_info("==============================================\n");
 
-  return string_begins_with(responseBuffer, "- C") ? SSH_ERROR : SSH_OK;
+  int result = string_begins_with(responseBuffer, "- C") ? SSH_ERROR : SSH_OK;
+  if (result == SSH_OK)
+  {
+    mReservedFileCache.push_back(filename);
+  }
+
+  return result;
 }
+
 
 int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions)
 {
   int cached = mReservedFileCache.find(filename);
-  if (cached > 0) mReservedFileCache.remove_at(cached);
+  if (cached >= 0) mReservedFileCache.remove_at(cached);
 
   log_info("\n==============================================");
   log_info("----------------------------------------------");

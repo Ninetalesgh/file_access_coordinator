@@ -4,7 +4,7 @@
 #include <core/string/print_string.h>
 
 #include "string_format.h"
-
+#include "access_coordinator.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////// Logging ///////////////////////////////////////////////////////////////////////////////////
@@ -12,13 +12,13 @@
 ///// These are working even with BSE_BUILD_RELEASE.                      ////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define log_info( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
-#define log_warning( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
+#define log_info( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::ALL), __VA_ARGS__)
+#define log_warning( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 
 #if defined(BSE_BUILD_DEBUG)
-#define log_error( ... ) { BREAK; bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL}, __VA_ARGS__); }
+#define log_error( ... ) { BREAK; bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__); }
 #else 
-#define log_error( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
+#define log_error( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,9 +28,9 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(BSE_BUILD_DEBUG_DEVELOPMENT)
-# define debug_log_info( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::LOCAL_AND_FILE}, "[DEV] ", __VA_ARGS__)
-# define debug_log_warning( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::LOCAL_AND_FILE}, "[DEV] ", __VA_ARGS__)
-# define debug_log_error( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::LOCAL_AND_FILE}, "[DEV] ", __VA_ARGS__)
+# define debug_log_info( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::LOCAL_AND_FILE), "[DEV] ", __VA_ARGS__)
+# define debug_log_warning( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::LOCAL_AND_FILE), "[DEV] ", __VA_ARGS__)
+# define debug_log_error( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::LOCAL_AND_FILE), "[DEV] ", __VA_ARGS__)
 #else
 # define debug_log_info( ... ) {}
 # define debug_log_warning( ... ) {}
@@ -49,13 +49,14 @@
 # define BREAK GENERATE_TRAP()
 # define assert(expression) { if ( !(expression) ) BREAK; }
 #elif defined(BSE_BUILD_DEVELOPMENT)
-# define BREAK {bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::LOCAL_CONSOLE}, "break in ", __FILE__," #", __LINE__ );}
-# define assert(expression) if (!(expression)) { bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL}, "assert in ", __FILE__," #", __LINE__ );}
+# define BREAK {this, bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::LOCAL_CONSOLE), "break in ", __FILE__," #", __LINE__ );}
+# define assert(expression) if (!(expression)) { bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), "assert in ", __FILE__," #", __LINE__ );}
 #else
-# define BREAK {bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::REMOTE_AND_FILE}, "break in ", __FILE__," #", __LINE__ );}
+# define BREAK {this, bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::REMOTE_AND_FILE), "break in ", __FILE__," #", __LINE__ );}
 # define assert(expression) CRASH_COND(!expression)
 #endif
 
+class AccessCoordinator;
 namespace bse
 {
   namespace debug
@@ -83,41 +84,77 @@ namespace bse
 
     struct LogParameters
     {
+      AccessCoordinator* forwardInstance;
       LogSeverity severity;
       LogOutputType type;
+      LogParameters(AccessCoordinator* _instance, LogSeverity _severity, LogOutputType _type)
+        : forwardInstance(_instance)
+        , severity(_severity)
+        , type(_type){}
     };
 
     //forward trivial messages directly to the output
-    void log( LogParameters const& parameters, char const* message ) 
+    void _log(LogParameters const& parameters, char const* message ) 
     {  
       if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_INFO)
       {
-        __print_line(message);
+        if (parameters.forwardInstance)
+        {
+          parameters.forwardInstance->output += message;
+        }
+        else
+        {
+          __print_line(message);
+        }
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_VERBOSE)
       {
-        __print_line(message);
+        if (parameters.forwardInstance)
+        {
+          parameters.forwardInstance->output += message;
+        }
+        else
+        {
+          __print_line(message);
+        }
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_WARNING)
       {
-        WARN_PRINT_ED(message);
+        if (parameters.forwardInstance)
+        {
+          parameters.forwardInstance->output += message;
+        }
+        else
+        {
+          WARN_PRINT_ED(message);
+        }
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_ERROR)
       {
-        ERR_PRINT_ED(message);
+        if (parameters.forwardInstance)
+        {
+          parameters.forwardInstance->output += message;
+        }
+        else
+        {
+          ERR_PRINT_ED(message);
+        }
       }
     }
-
-    void log( LogParameters const& parameters, char* message ) { log( parameters, (char const*)message ); }
 
     template<typename... Args> void log( LogParameters const& parameters, Args... args )
     {
       char debugBuffer[BSE_STACK_BUFFER_LARGE];
-      s32 bytesToWrite = string_format( debugBuffer, BSE_STACK_BUFFER_LARGE, args... ) - 1 /* ommit null */;
+      s32 bytesToWrite = string_format( debugBuffer, BSE_STACK_BUFFER_LARGE - 1, args... ) - 1 /* ommit null */;
       if ( bytesToWrite > 0 )
       {
+        if ( debugBuffer[bytesToWrite - 1] != '\n' )
+        {
+          debugBuffer[bytesToWrite++] = '\n';
+        }
+
         debugBuffer[bytesToWrite] = '\0';
-        log(parameters, (char const*)debugBuffer);
+        _log(parameters, (char const*)debugBuffer);
       }
     }
   };
