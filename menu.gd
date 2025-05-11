@@ -16,6 +16,9 @@ var accessCoordinator = AccessCoordinator.new()
 @onready var text_user = %text_user
 @onready var text_filepath = %text_filepath
 
+var defaultConfigPath = "res://default_access.config"
+var configPath = "user://access.config"
+
 func set_filepath(_filepath: String):
   filepath = _filepath
   hasChanged = true
@@ -49,12 +52,8 @@ func _process(_delta: float) -> void:
   if !fetched.is_empty():
     _log(fetched)
 
-func load_config():
-  var configRes = "res://access.config"
-  var file = FileAccess.open(configRes, FileAccess.READ)
-  var configText = file.get_as_text()
-  var lines = configText.split("\n")
-  
+func set_config(configString: String) -> bool:
+  var lines = configString.split("\n")
   for line in lines:
     if line.begins_with("filepath="):
       filepath = line.substr(9)
@@ -68,26 +67,53 @@ func load_config():
       sshPassword = line.substr(12)
     elif line.begins_with("remoteBaseDir="):
       remoteBaseDir = line.substr(14)
-  
   if sshHostname.is_empty() || sshUsername.is_empty() || sshPassword.is_empty() || remoteBaseDir.is_empty():
-    _log("- Error: access.config does not have the necessary declarations. Needed are:\nsshHostname=\nsshUsername\nsshPassword\nremoteBaseDir=\n")
-  
+    return false
+  return true
+
+func load_config():
+  var file = FileAccess.open(configPath, FileAccess.READ)
+  var firstRun = false
+  if !file:
+    file = FileAccess.open(defaultConfigPath, FileAccess.READ)
+    if file:
+      firstRun = true
+    else:
+      _log("- Error: Unable to fetch default config.")
+      return
+
+  var configText = file.get_as_text()
+  if !set_config(configText):
+    var defaultFile = FileAccess.open(defaultConfigPath, FileAccess.READ)
+    if defaultFile && set_config(defaultFile.get_as_text()):
+      _log("- Warning: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default values were loaded, feel free to 'Save Config' to overwrite.")
+      defaultFile.close()
+    else:
+      _log("- Error: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default file was also not present.")
+    
   text_user.text = user
   text_filepath.text = filepath
+  file.close()
+  if firstRun:
+    _write_config_file()
+
+func _write_config_file():
+  var file = FileAccess.open(configPath, FileAccess.WRITE)
+  print(file.get_as_text())
+  var filepathLine = filepath if filepath.find("\n") == -1 else filepath.substr(0, filepath.find("\n"))
+  var userLine = user if user.find("\n") == -1 else user.substr(0, user.find("\n"))
+
+  file.store_line("filepath=" + filepathLine)
+  file.store_line("user=" + userLine)
+  file.store_line("sshHostname=" + sshHostname)
+  file.store_line("sshUsername=" + sshUsername)
+  file.store_line("sshPassword=" + sshPassword)
+  file.store_line("remoteBaseDir=" + remoteBaseDir)
   file.close()
 
 func _on_save_config_button_pressed():
   if _check_cache():
-    var configRes = "res://access.config"
-    var file = FileAccess.open(configRes, FileAccess.WRITE)
-    print(file.get_as_text())
-    file.store_line("filepath=" + filepath)
-    file.store_line("user=" + user)
-    file.store_line("sshHostname=" + sshHostname)
-    file.store_line("sshUsername=" + sshUsername)
-    file.store_line("sshPassword=" + sshPassword)
-    file.store_line("remoteBaseDir=" + remoteBaseDir)
-    file.close()
+    _write_config_file()
     _log("- Saved access.config.\n")
   else:
     _log("- Error: Can't write config file, current loaded config is faulty.\n")

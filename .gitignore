@@ -2,4 +2,4 @@ bin/
 .godot/
 modules/ssh_native/__pycache__
 /android/
-access.config
+default_access.config
