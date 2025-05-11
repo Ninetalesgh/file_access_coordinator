@@ -4,8 +4,12 @@
 TARGET="$1"
 OUT_FILENAME="fac"
 DEBUG_SYMBOLS="no"
+OPTIMIZE="auto"
 
-if [ ! "$TARGET" -eq "editor" ]; then TARGET="template_release"; fi
+if [ ! "$TARGET" = "editor" ]; then 
+	TARGET="template_release"
+	OPTIMIZE="size"
+fi
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 GODOT_SOURCE_DIR="$SCRIPT_DIR/../godot"
@@ -39,6 +43,7 @@ echo "-----------------------------------------"
 echo "- Platform: $PLATFORM" 
 echo "- Target: $TARGET" 
 echo "- Debug Symbols: $DEBUG_SYMBOLS" 
+echo "- Optimize: $OPTIMIZE" 
 echo "-----------------------------------------"
 echo "--- Pushing godot source dir ------------"
 pushd $GODOT_SOURCE_DIR
@@ -51,7 +56,7 @@ echo ""
 
 
 echo "External modules expected at: " $SCRIPT_DIR
-scons platform=$PLATFORM target=$TARGET debug_symbols=$DEBUG_SYMBOLS custom_modules=$CUSTOM_MODULE_DIRS
+scons platform=$PLATFORM target=$TARGET debug_symbols=$DEBUG_SYMBOLS custom_modules=$CUSTOM_MODULE_DIRS optimize=$OPTIMIZE
 status=$?
 popd
 

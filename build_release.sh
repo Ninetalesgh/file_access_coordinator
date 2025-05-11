@@ -1,4 +1,3 @@
 #!/bin/bash
 
-bash build.sh template_release
-
+bash build.sh ree

@@ -82,6 +82,7 @@ offset_top = 90.0
 offset_right = 655.0
 offset_bottom = 121.0
 theme_override_font_sizes/font_size = 15
+scroll_past_end_of_file = true
 
 [node name="text_filepath" type="TextEdit" parent="."]
 unique_name_in_owner = true
@@ -90,6 +91,7 @@ offset_top = 118.0
 offset_right = 655.0
 offset_bottom = 149.0
 theme_override_font_sizes/font_size = 15
+scroll_past_end_of_file = true
 
 [node name="Label2" type="Label" parent="."]
 offset_left = 4.0

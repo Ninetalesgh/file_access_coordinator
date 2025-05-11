@@ -41,7 +41,6 @@ func set_remoteBaseDir(_remoteBaseDir: String):
 func _ready() -> void:
   add_child(accessCoordinator)
   load_config()
-  pass
 
 func _log(message: String):
   output.text += message
@@ -76,20 +75,24 @@ func load_config():
   var firstRun = false
   if !file:
     file = FileAccess.open(defaultConfigPath, FileAccess.READ)
-    if file:
-      firstRun = true
-    else:
-      _log("- Error: Unable to fetch default config.")
-      return
+  if file:
+    firstRun = true
+  else:
+    _log("- Error: Unable to fetch default config.\n")
+    return
 
   var configText = file.get_as_text()
-  if !set_config(configText):
+  if set_config(configText):
+    _log("- Successfully loaded 'access.config'.")
+  else:
     var defaultFile = FileAccess.open(defaultConfigPath, FileAccess.READ)
-    if defaultFile && set_config(defaultFile.get_as_text()):
-      _log("- Warning: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default values were loaded, feel free to 'Save Config' to overwrite.")
+    if defaultFile:
+      _log("- Warning: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default values were loaded, feel free to 'Save Config' to overwrite.\n")
+      if set_config(defaultFile.get_as_text()):
+        _log("- Error: Default config corrupted.\n")
       defaultFile.close()
     else:
-      _log("- Error: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default file was also not present.")
+      _log("- Error: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default file was also not present.\n")
     
   text_user.text = user
   text_filepath.text = filepath
@@ -99,10 +102,8 @@ func load_config():
 
 func _write_config_file():
   var file = FileAccess.open(configPath, FileAccess.WRITE)
-  print(file.get_as_text())
   var filepathLine = filepath if filepath.find("\n") == -1 else filepath.substr(0, filepath.find("\n"))
   var userLine = user if user.find("\n") == -1 else user.substr(0, user.find("\n"))
-
   file.store_line("filepath=" + filepathLine)
   file.store_line("user=" + userLine)
   file.store_line("sshHostname=" + sshHostname)
@@ -122,32 +123,31 @@ func _on_download_button_pressed() -> void:
   if _check_cache():
     _update_native_config()
     _log_time()
-    accessCoordinator.download()
+  accessCoordinator.download()
 
 func _on_upload_button_pressed() -> void:
   if _check_cache():
     _update_native_config()
     _log_time()
-    accessCoordinator.upload()
+  accessCoordinator.upload()
 
 func _on_release_button_pressed() -> void:
   if _check_cache():
     _update_native_config()
     _log_time()
-    accessCoordinator.release(false)
+  accessCoordinator.release(false)
 
 func _on_force_release_button_pressed() -> void:
   if _check_cache():
     _update_native_config()
     _log_time()
-    accessCoordinator.release(true)
+  accessCoordinator.release(true)
 
 func _on_reserve_button_pressed() -> void:
   if _check_cache():
     _update_native_config()
     _log_time()
-    accessCoordinator.reserve()
-
+  accessCoordinator.reserve()
 
 func _check_cache() -> bool:
   if !text_user.text.is_empty() && text_user.text != user:
