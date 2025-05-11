@@ -6,9 +6,11 @@ OUT_FILENAME="fac"
 DEBUG_SYMBOLS="no"
 OPTIMIZE="auto"
 
-if [ ! "$TARGET" = "editor" ]; then 
-	TARGET="template_release"
+if [ "$TARGET" = "" ]; then 
+	TARGET="editor"
+elif [ "$TARGET" = "template_release" ]; then
 	OPTIMIZE="size"
+#elif [ "$TARGET" = "template_debug" ]; then	
 fi
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
@@ -60,12 +62,28 @@ scons platform=$PLATFORM target=$TARGET debug_symbols=$DEBUG_SYMBOLS custom_modu
 status=$?
 popd
 
+CONFIGURATION=""
+GODOT_VERSION="4.4.2rc"
 ARCH=x86_64
-if [ "$PLATFORM" = "linux" ]; then PLATFORM="linuxbsd"; fi
-if [ "$TARGET" = "editor" ]; then OUT_FILENAME="${OUT_FILENAME}_editor"; fi
+
+if [ "$TARGET" = "editor" ]; then 
+	OUT_FILENAME="godot_editor"; 
+else 
+	if [ "$TARGET" = "template_release" ]; then
+		CONFIGURATION="release"
+	elif [ "$TARGET" = "template_debug" ]; then
+		CONFIGURATION="debug"
+	fi
+	OUT_FILENAME="${PLATFORM}_${CONFIGURATION}.$ARCH"
+fi
+
+if [ "$PLATFORM" = "linux" ]; then 
+	PLATFORM="linuxbsd"
+fi
 
 mkdir -p bin
 cp -f "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM.$TARGET.$ARCH" "bin/$OUT_FILENAME"
+
 
 if [ $status -ne 0 ]; then
 	echo "-----------------------------------------"
