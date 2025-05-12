@@ -150,12 +150,17 @@ bool load_config()
   return true;
 }
 
+void print_current_context()
+{
+  std::cout << "Current user: " << coordinator.mUser.str << '\n';
+  std::cout << "Current file: " << coordinator.mFullLocalPath.str << '\n';
+}
+
 int evaluate_expression(char const* expression)
 {
   if (string_begins_with(expression, "show"))
   {
-    std::cout << "Current user: " << coordinator.mUser.str << '\n';
-    std::cout << "Current file: " << coordinator.mFullLocalPath.str << '\n';
+    print_current_context();
   }
   else if (string_begins_with(expression, "download"))
   {
@@ -222,11 +227,19 @@ int evaluate_expression(char const* expression)
   }
   else if (string_begins_with(expression, "init"))
   {
-    load_config();
+    if (load_config())
+    {
+      std::cout << "Loaded access.config from disk.\n";
+      print_current_context();
+    }
   }
   else if (string_begins_with(expression, "save"))
   {
-    save_config();
+    if (save_config())
+    {
+      std::cout << "Saved cached configuration.\n";
+      print_current_context();
+    }
   }
   else if (string_begins_with(expression, "exit"))
   {
@@ -246,7 +259,7 @@ int evaluate_expression(char const* expression)
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
              "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
              "user -> Set the current context user (user=\"example\" to input the prompt directly).\n"
-             "filepath -> Set the current context filepath (filepath=\"example filepath\" to input the prompt directly).\n"
+             "file -> Set the current context filepath (file=\"example filepath\" to input the prompt directly).\n"
              "init -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
              "save -> Save the current configuration to access.config.\n"
              "exit -> Exits the application.\n"
