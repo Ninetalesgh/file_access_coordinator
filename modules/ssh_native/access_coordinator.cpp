@@ -105,7 +105,7 @@ bool AccessCoordinator::release(bool overridePermission)
   }
 }
 
-bool AccessCoordinator::init(String filepath, String user, String sshUsername, String sshHostname, String sshPassword, String remoteBaseDir)
+bool AccessCoordinator::init(String filepath, String user, String sshHostname, String sshUsername, String sshPassword, String remoteBaseDir)
 { 
   if (mSession)
   {

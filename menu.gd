@@ -159,7 +159,7 @@ func _check_cache() -> bool:
 
 func _update_native_config():
   if hasChanged:
-    accessCoordinator.init(filepath, user, sshUsername, sshHostname, sshPassword, remoteBaseDir)
+    accessCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir)
     hasChanged = false
 
 func _check_config() -> bool:
