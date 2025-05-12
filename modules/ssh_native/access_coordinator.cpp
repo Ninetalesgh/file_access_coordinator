@@ -300,7 +300,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
 
   char buffer[4096];
   int bytesRead;
-  while ((bytesRead = fread(buffer,1, sizeof(buffer), localFile)) > 0)
+  while ((bytesRead = (int)fread(buffer,1, sizeof(buffer), localFile)) > 0)
   {
     if (sftp_write(remoteFile, buffer, bytesRead) != bytesRead)
     {
@@ -386,7 +386,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 
   char buffer[4096];
   int bytesRead;
-  while ((bytesRead = sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
+  while ((bytesRead = (int)sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
   {
     if (fwrite(buffer, 1, bytesRead, localFile) != (size_t)bytesRead)
     {

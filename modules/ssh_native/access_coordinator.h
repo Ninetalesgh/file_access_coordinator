@@ -37,7 +37,7 @@ template<typename T> struct Vector {
   { 
     auto it = std::find(vec.begin(), vec.end(), obj);
     if (it == vec.end()) return -1;
-    else return std::distance(vec.begin(), it);
+    else return (int)std::distance(vec.begin(), it);
   }
   void push_back(T obj) {vec.push_back(obj);}
   void remove_at(int i) {vec.erase(vec.begin() + i);}
