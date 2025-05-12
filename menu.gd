@@ -16,7 +16,7 @@ var accessCoordinator = AccessCoordinator.new()
 @onready var text_user = %text_user
 @onready var text_filepath = %text_filepath
 
-var defaultConfigPath = "res://default_access.config"
+var defaultConfigPath = "res://default_access.tres"
 var configPath = "user://access.config"
 
 func set_filepath(_filepath: String):
