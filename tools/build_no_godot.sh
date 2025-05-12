@@ -14,10 +14,13 @@ else
 	PLATFORM="windows"
 fi
 
+INCLUDE_AND_LIBS=""
+
 if [ "$PLATFORM" = "windows" ]; then
 	OUT_PATH="$OUT_PATH.exe"
+	INCLUDE_AND_LIBS="-I/c/src/include -L/c/src/lib/libssh -lssh"
 elif [ "$PLATFORM" = "linux" ]; then
-	OUT_PATH="$OUT_PATH"
+	INCLUDE_AND_LIBS="-I/usr/include -lssh"
 fi
 
 g++ "$MAIN_PATH" -o "$OUT_PATH" -I/usr/include -lssh
