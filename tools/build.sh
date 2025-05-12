@@ -20,7 +20,7 @@ else
 fi
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GODOT_SOURCE_DIR="$(cd "$PROJECT_DIR/../godot" && pwd)"
+GODOT_SOURCE_DIR="$(cd "$PROJECT_DIR/../godot.4.4.2" && pwd)"
 
 MODULE_ROOT_DIR="$PROJECT_DIR/modules"
 BIN_DIR="$PROJECT_DIR/bin"

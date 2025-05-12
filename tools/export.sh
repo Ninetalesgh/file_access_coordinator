@@ -62,8 +62,6 @@ elif [ "$PLATFORM" = "linux" ]; then
 	PRESET="Linux"
 fi
 
-
-
 echo "\"$EDITOR_PATH\" --export-$CONFIG \"$PRESET\" \"$EXPORT_DIR/$OUT_FILENAME\""
 
 "$EDITOR_PATH" --export-$CONFIG "$PRESET" "$EXPORT_DIR/$OUT_FILENAME"
