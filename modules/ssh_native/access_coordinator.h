@@ -127,7 +127,9 @@ public:
 
   //
   ssh_session mSession = nullptr;
-#ifndef NO_GODOT
+#ifdef NO_GODOT
+  bool mAgreeAllPrompts = false;
+#else
   ConfirmationDialog* mConfirmationDialog = nullptr;
 #endif
   Vector<String> mReservedFileCache;

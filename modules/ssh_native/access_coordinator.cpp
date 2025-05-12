@@ -176,11 +176,14 @@ void AccessCoordinator::show_confirmation_dialog(String title, String message, v
 {
 #ifdef NO_GODOT
   std::string input;
-  std::cout << message.str;
-  std::cout << "\nConfirm (y/n): ";
-  std::getline(std::cin, input);
+  if (!mAgreeAllPrompts)
+  {
+    std::cout << message.str;
+    std::cout << " (y/n): ";
+    std::getline(std::cin, input);
+  }
 
-  if (input == "y" || input == "Y")
+  if (mAgreeAllPrompts || input == "y" || input == "Y")
   {
     (this->*on_confirm)();
   }

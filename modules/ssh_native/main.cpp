@@ -232,6 +232,10 @@ int evaluate_expression(char const* expression)
   {
     return false;
   }
+  else if (string_begins_with(expression, "agreeall"))
+  {
+    coordinator.mAgreeAllPrompts = true; 
+  }
   else
   {
     std::cout << "Command unknown, available expressions are:\n"
