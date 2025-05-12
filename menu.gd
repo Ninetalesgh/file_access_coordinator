@@ -16,7 +16,6 @@ var accessCoordinator = AccessCoordinator.new()
 @onready var text_user = %text_user
 @onready var text_filepath = %text_filepath
 
-var defaultConfigPath = "res://default_access.tres"
 var configPath = "user://access.config"
 
 func set_filepath(_filepath: String):
@@ -74,7 +73,7 @@ func load_config():
   var file = FileAccess.open(configPath, FileAccess.READ)
   var firstRun = false
   if !file:
-    file = FileAccess.open(defaultConfigPath, FileAccess.READ)
+    file = DEFAULT_VALUES.new()
   if file:
     firstRun = true
   else:
@@ -85,7 +84,7 @@ func load_config():
   if set_config(configText):
     _log("- Successfully loaded 'access.config'.\n")
   else:
-    var defaultFile = FileAccess.open(defaultConfigPath, FileAccess.READ)
+    var defaultFile = DEFAULT_VALUES.new()
     if defaultFile:
       _log("- Warning: The file 'access.config' in\n'" + OS.get_user_data_dir() + "'\ndoes not have the necessary declarations, needed are:\nsshHostname=\nsshUsername=\nsshPassword=\nremoteBaseDir=\nThe default values were loaded, feel free to 'Save Config' to overwrite.\n")
       if set_config(defaultFile.get_as_text()):

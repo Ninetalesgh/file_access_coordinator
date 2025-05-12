@@ -5,5 +5,5 @@ modules/ssh_native/__pycache__
 modules/ssh_native/register_types.linux*
 modules/ssh_native/register_types.windows*
 /android/
-default_access.tres
+default_access.g*
 
