@@ -129,10 +129,10 @@ bool AccessCoordinator::init(String filepath, String user, String sshHostname, S
 
 bool AccessCoordinator::is_current_base_config_valid()
 {
-  if (mSshUsername.str.empty()
-  || mSshHostname.str.empty()
-  || mSshPassword.str.empty()
-  || mRemoteBaseDir.str.empty())
+  if (mSshUsername.is_empty()
+  || mSshHostname.is_empty()
+  || mSshPassword.is_empty()
+  || mRemoteBaseDir.is_empty())
   {
     return false;
   }

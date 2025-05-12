@@ -13,6 +13,7 @@ struct String {
 
   String const& utf8() const { return *this; }
   char const* get_data() const { return str.c_str(); }
+  bool is_empty() { return str.empty(); }
   String get_file() 
   {
     auto pos = str.find_last_of("/\\");
