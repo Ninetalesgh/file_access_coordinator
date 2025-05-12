@@ -66,6 +66,7 @@ protected:
 	static void _bind_methods();
 
 public: 
+  bool set_filepath(String filepath);
   bool init(String filepath, String user, String sshHostname, String sshUsername, String sshPassword, String remoteBaseDir);
   bool reserve();
   bool download();

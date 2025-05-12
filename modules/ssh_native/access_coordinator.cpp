@@ -105,6 +105,13 @@ bool AccessCoordinator::release(bool overridePermission)
   }
 }
 
+bool AccessCoordinator::set_filepath(String filepath)
+{
+  mFullLocalPath = filepath;
+  mFilename = mFullLocalPath.get_file();
+  return true;
+}
+
 bool AccessCoordinator::init(String filepath, String user, String sshHostname, String sshUsername, String sshPassword, String remoteBaseDir)
 { 
   if (mSession)
@@ -112,8 +119,8 @@ bool AccessCoordinator::init(String filepath, String user, String sshHostname, S
     shutdown_session();
   }
   
-  mFullLocalPath = filepath;
-  mFilename = mFullLocalPath.get_file();
+  set_filepath(filepath);
+  
   mUser = user;
   mSshUsername = sshUsername;
   mSshHostname = sshHostname;
@@ -170,7 +177,7 @@ void AccessCoordinator::show_confirmation_dialog(String title, String message, v
 #ifdef NO_GODOT
   std::string input;
   std::cout << message.str;
-  std::cout << "Are you sure? (y/n): ";
+  std::cout << "\nConfirm (y/n): ";
   std::getline(std::cin, input);
 
   if (input == "y" || input == "Y")
@@ -197,7 +204,6 @@ void AccessCoordinator::show_confirmation_dialog(String title, String message, v
   mConfirmationDialog->show();
 #endif
 }
-
 
 constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }
 

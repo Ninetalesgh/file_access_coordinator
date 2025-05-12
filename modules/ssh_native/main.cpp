@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <fstream>
 
-//I made this part c++, it was easier to get going right away
+//I made this part c++17, it was easier to get going right away
 AccessCoordinator coordinator;
 bool running = true;
 
@@ -49,12 +49,12 @@ bool save_config()
   std::ofstream configFileWriteStream(filePath);
   if (configFileWriteStream)
   {
-    configFileWriteStream << "filepath=" << coordinator.mFullLocalPath.str;
-    configFileWriteStream << "user=" << coordinator.mUser.str;
-    configFileWriteStream << "sshHostname=" << coordinator.mSshHostname.str;
-    configFileWriteStream << "sshUsername=" << coordinator.mSshUsername.str;
-    configFileWriteStream << "sshPassword=" << coordinator.mSshPassword.str;
-    configFileWriteStream << "remoteBaseDir=" << coordinator.mRemoteBaseDir.str;
+    configFileWriteStream << "filepath=" << coordinator.mFullLocalPath.str << '\n';
+    configFileWriteStream << "user=" << coordinator.mUser.str << '\n';
+    configFileWriteStream << "sshHostname=" << coordinator.mSshHostname.str << '\n';
+    configFileWriteStream << "sshUsername=" << coordinator.mSshUsername.str << '\n';
+    configFileWriteStream << "sshPassword=" << coordinator.mSshPassword.str << '\n';
+    configFileWriteStream << "remoteBaseDir=" << coordinator.mRemoteBaseDir.str << '\n';
     return true;
   }
 
@@ -136,6 +136,7 @@ bool load_config()
   }
   else
   {
+    //use default values and save to config
     coordinator.init(static_filepath, static_user, static_sshHostname, static_sshUsername, static_sshPassword, static_remoteBaseDir);
     save_config();
   }
@@ -145,7 +146,12 @@ bool load_config()
 
 int evaluate_expression(char const* expression)
 {
-  if (string_begins_with(expression, "download"))
+  if (string_begins_with(expression, "show"))
+  {
+    std::cout << "Current user: " << coordinator.mUser.str << '\n';
+    std::cout << "Current file: " << coordinator.mFullLocalPath.str << '\n';
+  }
+  else if (string_begins_with(expression, "download"))
   {
     coordinator.download();
   }
@@ -165,9 +171,43 @@ int evaluate_expression(char const* expression)
   {
     coordinator.release(true);
   }
+  else if (string_begins_with(expression, "user"))
+  {
+    std::string input;
+    if (string_begins_with(expression, "user="))
+    {
+      input = expression + 5;
+    }
+    else
+    {
+      std::cout << "Set current context user: ";
+      std::getline(std::cin, input);
+    }
+    std::cout << "Setting user to: " << input << '\n';
+    coordinator.mUser = input;
+  }
+  else if (string_begins_with(expression, "filepath"))
+  {
+    std::string input;
+    if (string_begins_with(expression, "filepath="))
+    {
+      input = expression + 9;
+    }
+    else
+    {
+      std::cout << "Set current context filepath: ";
+      std::getline(std::cin, input);
+    }
+    std::cout << "Setting filepath to: " << input << '\n';
+    coordinator.set_filepath(input);
+  }
   else if (string_begins_with(expression, "init"))
   {
     load_config();
+  }
+  else if (string_begins_with(expression, "save"))
+  {
+    save_config();
   }
   else if (string_begins_with(expression, "exit"))
   {
@@ -176,13 +216,17 @@ int evaluate_expression(char const* expression)
   else
   {
     std::cout << "Command unknown, available expressions are:\n"
-             "init -> Reloads configuration.\n"
-             "exit -> Exits the application.\n"
+             "show -> Shows current user and filepath.\n"
              "download -> Downloads the configured file from the server, overwriting your local version.\n"
              "upload -> Uploads your local version to the server, overwriting the remote version.\n"
              "reserve -> Explicitly reserve the remote file for your current user and IP without otherwise manipulating files.\n"
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
-             "forcerelease -> Explicitly FORCE the release of the remote file, no matter who currently has it reserved, anyone can access it after.\n";
+             "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
+             "user -> Set the current context user (user=\"example\" to input the prompt directly).\n"
+             "filepath -> Set the current context filepath (filepath=\"example filepath\" to input the prompt directly).\n"
+             "init -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
+             "save -> Save the current configuration to access.config.\n"
+             "exit -> Exits the application.\n";
   }
   return true;
 }
