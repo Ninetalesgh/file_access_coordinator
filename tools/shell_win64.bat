@@ -6,7 +6,7 @@ REM ----------------------------------------------------------------------------
 
 set vcPath[0]="C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" 
 set vcPath[1]="C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat"
-set vcPath[2]=.
+set vcPath[2]="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
 set vcPath[3]=.
 set vcPath[4]=.
 
