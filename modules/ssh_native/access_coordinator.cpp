@@ -1,5 +1,3 @@
-#include "access_coordinator.h"
-
 #include "debug.h"
 
 #ifndef S_IRUSR
@@ -9,12 +7,14 @@
 
 void AccessCoordinator::_bind_methods()
 {
+#ifndef NO_GODOT
   ClassDB::bind_method(D_METHOD("init", "filepath", "user", "sshUsername", "sshHostname", "sshPassword", "remoteBaseDir"), &AccessCoordinator::init);
   ClassDB::bind_method(D_METHOD("reserve"), &AccessCoordinator::reserve);
   ClassDB::bind_method(D_METHOD("download"), &AccessCoordinator::download);
   ClassDB::bind_method(D_METHOD("upload"), &AccessCoordinator::upload);
   ClassDB::bind_method(D_METHOD("release", "overridePermission"), &AccessCoordinator::release);
   ClassDB::bind_method(D_METHOD("fetch_output"), &AccessCoordinator::fetch_output);
+#endif
 }
 
 String AccessCoordinator::fetch_output()
@@ -154,6 +154,17 @@ void AccessCoordinator::on_force_release_dialog_confirm()
 
 void AccessCoordinator::show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)())
 {
+#ifdef NO_GODOT
+  std::string input;
+  std::cout << message.str;
+  std::cout << "Are you sure? (y/n): ";
+  std::getline(std::cin, input);
+
+  if (input == "y" || input == "Y")
+  {
+    (this->*on_confirm)();
+  }
+#else
   if (mConfirmationDialog)
   {
     mConfirmationDialog->queue_free();
@@ -171,6 +182,7 @@ void AccessCoordinator::show_confirmation_dialog(String title, String message, v
 
   mConfirmationDialog->popup_centered();
   mConfirmationDialog->show();
+#endif
 }
 
 

@@ -1,7 +1,12 @@
 #pragma once
 
-
+#ifndef NO_GODOT
 #include <core/string/print_string.h>
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 #include "string_format.h"
 #include "access_coordinator.h"
@@ -56,7 +61,6 @@
 # define assert(expression) CRASH_COND(!expression)
 #endif
 
-class AccessCoordinator;
 namespace bse
 {
   namespace debug
@@ -98,6 +102,9 @@ namespace bse
     {  
       if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_INFO)
       {
+        #ifdef NO_GODOT
+        printf(message);
+        #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
@@ -106,9 +113,13 @@ namespace bse
         {
           __print_line(message);
         }
+        #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_VERBOSE)
       {
+        #ifdef NO_GODOT
+        printf(message);
+        #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
@@ -117,9 +128,13 @@ namespace bse
         {
           __print_line(message);
         }
+        #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_WARNING)
       {
+        #ifdef NO_GODOT
+        printf(message);
+        #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
@@ -128,9 +143,13 @@ namespace bse
         {
           WARN_PRINT_ED(message);
         }
+        #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_ERROR)
       {
+        #ifdef NO_GODOT
+        printf(message);
+        #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
@@ -139,6 +158,7 @@ namespace bse
         {
           ERR_PRINT_ED(message);
         }
+        #endif
       }
     }
 

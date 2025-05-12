@@ -1,20 +1,66 @@
 #pragma once
 
+#ifdef NO_GODOT
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+struct String {
+  String(){}
+  String(char const* s) { str = s;}
+  String(String const& other) { str = other.str;}
+  String(std::string const& other) { str = other;}
+
+  String const& utf8() const { return *this; }
+  char const* get_data() const { return str.c_str(); }
+  String get_file() 
+  {
+    auto pos = str.find_last_of("/\\");
+    if (pos != std::string::npos)
+    {
+      return str.substr(pos + 1);
+    }
+    else
+    {
+      return String(str);
+    }
+  }
+  std::string str;
+  String const& operator =(String const& other) { str += other.get_data(); return *this;}
+  String const& operator =(char const* other) { str += other; return *this;}
+
+  friend bool operator ==(String a, String const b) {return a.str == b.str;}
+};
+
+template<typename T> struct Vector {
+  int find(T const& obj)
+  { 
+    auto it = std::find(vec.begin(), vec.end(), obj);
+    if (it == vec.end()) return -1;
+    else return std::distance(vec.begin(), it);
+  }
+  void push_back(T obj) {vec.push_back(obj);}
+  void remove_at(int i) {vec.erase(vec.begin() + i);}
+  operator std::vector<T>() {return vec;}
+  std::vector<T> vec;
+};
+#else
 #include <core/object/ref_counted.h>
 #include <scene/gui/dialogs.h>
+#endif
 
 #include <libssh/libssh.h>
 #include <libssh/sftp.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
 
-#include "string_format.h"
 
+
+#ifdef NO_GODOT
+class AccessCoordinator {
+#else
 class AccessCoordinator : public Node {
 	GDCLASS(AccessCoordinator, Node)
-
+#endif
 protected:
 	static void _bind_methods();
 
@@ -28,6 +74,8 @@ public:
   String fetch_output();
   String output;
 
+  int shutdown_session();
+  
 void on_download_dialog_confirm();
 void on_upload_dialog_confirm();
 void on_force_release_dialog_confirm();
@@ -53,7 +101,6 @@ private:
 
   int log_section_exit_return_error();
   int _init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword);
-  int shutdown_session();
   
   int upload_file(const char* localPath, char const* remotePath);
 
@@ -78,7 +125,9 @@ private:
 
   //
   ssh_session mSession = nullptr;
+#ifndef NO_GODOT
   ConfirmationDialog* mConfirmationDialog = nullptr;
+#endif
   Vector<String> mReservedFileCache;
 };
 
