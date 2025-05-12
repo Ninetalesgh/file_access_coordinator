@@ -273,7 +273,7 @@ int loop_wait_for_expression()
   while(running)
   {
     std::string input;
-    std::cout << "Command: ";
+    std::cout << "----------------------------------------------\nCommand: ";
     std::getline(std::cin, input);
     if (!evaluate_expression(input.c_str())) running = false;
   }
