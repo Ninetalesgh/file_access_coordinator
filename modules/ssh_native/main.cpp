@@ -249,7 +249,8 @@ int evaluate_expression(char const* expression)
              "filepath -> Set the current context filepath (filepath=\"example filepath\" to input the prompt directly).\n"
              "init -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
              "save -> Save the current configuration to access.config.\n"
-             "exit -> Exits the application.\n";
+             "exit -> Exits the application.\n"
+             "agreeall -> Confirms all file related prompts without asking, place as first argument if running from command line.\n";
   }
   return true;
 }
