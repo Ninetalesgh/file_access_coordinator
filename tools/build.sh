@@ -85,7 +85,7 @@ elif [ "$PLATFORM_EXTRA" = "windows" ]; then
 	OUT_FILENAME="$OUT_FILENAME.exe"
 fi
 
-mkdir -p bin
+mkdir -p "$BIN_DIR"
 echo "-----------------------------------------"
 
 if [ -e "$GODOT_SOURCE_DIR/bin/godot.$PLATFORM_EXTRA.$TARGET.$ARCH" ]; then

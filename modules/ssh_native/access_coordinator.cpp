@@ -127,6 +127,19 @@ bool AccessCoordinator::init(String filepath, String user, String sshUsername, S
   return SSH_OK == _init(user.utf8().get_data(), sshUsername.utf8().get_data(), sshHostname.utf8().get_data(), sshPassword.utf8().get_data());
 }
 
+bool AccessCoordinator::is_current_base_config_valid()
+{
+  if (mSshUsername.str.empty()
+  || mSshHostname.str.empty()
+  || mSshPassword.str.empty()
+  || mRemoteBaseDir.str.empty())
+  {
+    return false;
+  }
+
+  return true;
+}
+
 void AccessCoordinator::on_download_dialog_confirm()
 {
   download_file(mFullLocalPath.utf8().get_data(), mFullRemotePath.utf8().get_data());

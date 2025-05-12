@@ -4,6 +4,7 @@ export/
 modules/ssh_native/__pycache__
 modules/ssh_native/register_types.linux*
 modules/ssh_native/register_types.windows*
+modules/ssh_native/default_access.h
 /android/
 default_access.g*
 

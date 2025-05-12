@@ -76,11 +76,11 @@ public:
 
   int shutdown_session();
   
-void on_download_dialog_confirm();
-void on_upload_dialog_confirm();
-void on_force_release_dialog_confirm();
+  void on_download_dialog_confirm();
+  void on_upload_dialog_confirm();
+  void on_force_release_dialog_confirm();
 
-private:
+  bool is_current_base_config_valid();
   void show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)());
 
   int request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
