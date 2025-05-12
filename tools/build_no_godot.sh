@@ -19,6 +19,8 @@ INCLUDE_AND_LIBS=""
 if [ "$PLATFORM" = "windows" ]; then
 	OUT_PATH="$OUT_PATH.exe"
 	INCLUDE_AND_LIBS="-I/c/src/include -L/c/src/lib/libssh -lssh.lib"
+	echo "NO WINDOWS"
+	exit 1
 elif [ "$PLATFORM" = "linux" ]; then
 	INCLUDE_AND_LIBS="-I/usr/include -lssh"
 fi
