@@ -7,12 +7,42 @@
 #include <filesystem>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
+#include <chrono>
+#include <ctime>
 
 //I made this part c++17, it was easier to get going right away
 AccessCoordinator coordinator;
 bool running = true;
 
 namespace fs = std::filesystem;
+
+bool ensure_path_exists(fs::path const& path)
+{
+  if (!fs::exists(path))
+  {
+    std::error_code ec;
+    if (fs::create_directories(path, ec))
+    {
+      std::cout << "Created directory: " << path << '\n';
+    }
+    else
+    {
+      std::cerr << "Failed to create directory: " << ec.message() << '\n';
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+void print_time()
+{
+  auto now = std::chrono::system_clock::now();
+  std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+  std::tm local_tm = *std::localtime(&now_time);
+  std::cout << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S") << '\n';
+}
 
 bool save_config()
 {
@@ -32,19 +62,7 @@ bool save_config()
   fs::path targetPath = fs::path(appData) / "Godot" / "app_userdata" / "file_access_coordinator";
   fs::path filePath = targetPath / "access.config";
 
-  if (!fs::exists(targetPath))
-  {
-    std::error_code ec;
-    if (fs::create_directories(targetPath, ec))
-    {
-      std::cout << "Created directory: " << targetPath << '\n';
-    }
-    else
-    {
-      std::cerr << "Failed to create directory: " << ec.message() << '\n';
-      return false;
-    }
-  }
+  ensure_path_exists(targetPath);
 
   std::ofstream configFileWriteStream(filePath);
   if (configFileWriteStream)
@@ -73,19 +91,7 @@ bool load_config()
   fs::path targetPath = fs::path(appData) / "Godot" / "app_userdata" / "file_access_coordinator";
   fs::path filePath = targetPath / "access.config";
 
-  if (!fs::exists(targetPath))
-  {
-    std::error_code ec;
-    if (fs::create_directories(targetPath, ec))
-    {
-      std::cout << "Created directory: " << targetPath << '\n';
-    }
-    else
-    {
-      std::cerr << "Failed to create directory: " << ec.message() << '\n';
-      return false;
-    }
-  }
+  ensure_path_exists(targetPath);
 
   if (fs::exists(filePath))
   {
@@ -153,22 +159,27 @@ int evaluate_expression(char const* expression)
   }
   else if (string_begins_with(expression, "download"))
   {
+    print_time();
     coordinator.download();
   }
   else if (string_begins_with(expression, "upload"))
   {
+    print_time();
     coordinator.upload();
   }
   else if (string_begins_with(expression, "reserve"))
   {
+    print_time();
     coordinator.reserve();
   }
   else if (string_begins_with(expression, "release"))
   {
+    print_time();
     coordinator.release(false);
   }
   else if (string_begins_with(expression, "forcerelease"))
   {
+    print_time();
     coordinator.release(true);
   }
   else if (string_begins_with(expression, "user"))
@@ -177,6 +188,10 @@ int evaluate_expression(char const* expression)
     if (string_begins_with(expression, "user="))
     {
       input = expression + 5;
+      if (input.size() >= 2 && input.front() == '"' && input.back() == '"')
+      {
+        input = input.substr(1, input.size() - 2);
+      }
     }
     else
     {
@@ -186,19 +201,23 @@ int evaluate_expression(char const* expression)
     std::cout << "Setting user to: " << input << '\n';
     coordinator.mUser = input;
   }
-  else if (string_begins_with(expression, "filepath"))
+  else if (string_begins_with(expression, "file"))
   {
     std::string input;
-    if (string_begins_with(expression, "filepath="))
+    if (string_begins_with(expression, "file="))
     {
-      input = expression + 9;
+      input = expression + 5;
+      if (input.size() >= 2 && input.front() == '"' && input.back() == '"')
+      {
+        input = input.substr(1, input.size() - 2);
+      }
     }
     else
     {
-      std::cout << "Set current context filepath: ";
+      std::cout << "Set current context file: ";
       std::getline(std::cin, input);
     }
-    std::cout << "Setting filepath to: " << input << '\n';
+    std::cout << "Setting file to: " << input << '\n';
     coordinator.set_filepath(input);
   }
   else if (string_begins_with(expression, "init"))

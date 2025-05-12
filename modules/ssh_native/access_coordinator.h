@@ -27,8 +27,8 @@ struct String {
     }
   }
   std::string str;
-  String const& operator =(String const& other) { str += other.get_data(); return *this;}
-  String const& operator =(char const* other) { str += other; return *this;}
+  String const& operator =(String const& other) { str = other.get_data(); return *this;}
+  String const& operator =(char const* other) { str = other; return *this;}
 
   friend bool operator ==(String a, String const b) {return a.str == b.str;}
 };
