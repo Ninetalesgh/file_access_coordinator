@@ -624,8 +624,8 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   responseBuffer[0] = '\0';
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
   stringFormatBuffer[0] = '\0';
-  // With 'examplefile' this will create an 'examplefilereservation' and enter the username and ip to reserve.
-  // If 'examplefile' has write permission and 'examplefilereservation' is empty, we can reserve it.
+  // With 'examplefile' this will create an '_examplefilereservation' and enter the username and ip to reserve.
+  // If 'examplefile' has write permission and '_examplefilereservation' is empty, we can reserve it.
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
                " && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
