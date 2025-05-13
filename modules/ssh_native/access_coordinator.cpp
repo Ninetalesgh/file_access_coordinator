@@ -116,6 +116,11 @@ bool AccessCoordinator::release(bool overridePermission)
   }
 }
 
+ReserveState AccessCoordinator::get_reserve_state(String* outOwner, s64* outFileSize)
+{
+  return get_reserve_state_of_remote_file(outOwner, outFileSize, mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress);
+}
+
 bool AccessCoordinator::set_filepath(String filepath)
 {
   mFullLocalPath = filepath;
@@ -685,4 +690,43 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   log_info("==============================================\n");
 
   return SSH_OK;
+}
+
+ReserveState AccessCoordinator::get_reserve_state_of_remote_file(String* outOwner, s64* outFileSize, char const* remoteBaseDir, char const* filename, char const* user, char const* myIp)
+{
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  stringFormatBuffer[0] = '\0';
+  //0 = file doesn't exist
+  //A = free
+  //B = owned by me followed by the size of the file on the server
+  //C = owned by other followed by the name and ip of the owner
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+               "cd '", remoteBaseDir,
+               "' && if [ ! -f ", filename, " ]; then echo \"0\"; elif [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
+               "then echo \"A\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, 
+               "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation'); fi"); 
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+
+  if (responseBuffer[0] == '0')
+  {
+    return ReserveState::UNKNOWN;
+  }
+  else if (responseBuffer[0] == 'A')
+  {
+    return ReserveState::NOT_RESERVED;
+  }
+  else if (responseBuffer[0] == 'B')
+  {
+    if(outFileSize && string_length(responseBuffer) > 2) string_parse_value(responseBuffer + 2, outFileSize);
+    return ReserveState::RESERVED_BY_ME;
+  }
+  else if (responseBuffer[0] == 'C')
+  {
+    if (outOwner && string_length(responseBuffer) > 2) *outOwner = (responseBuffer + 2);
+    return ReserveState::RESERVED_BY_OTHER;
+  }
+
+  return ReserveState::UNKNOWN;
 }

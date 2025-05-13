@@ -69,7 +69,13 @@ template<typename T> struct Vector {
 #include <libssh/sftp.h>
 
 
-
+enum class ReserveState : int
+{
+  UNKNOWN,
+  NOT_RESERVED,
+  RESERVED_BY_ME,
+  RESERVED_BY_OTHER,
+};
 
 #ifdef NO_GODOT
 class AccessCoordinator {
@@ -87,7 +93,7 @@ public:
   bool download();
   bool upload();
   bool release(bool overridePermissions = false);
-
+  ReserveState get_reserve_state(String* outOwner, s64* outFileSize);
   String fetch_output();
   String output;
 
@@ -127,6 +133,7 @@ public:
 
   int release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions = false);
 
+  ReserveState get_reserve_state_of_remote_file(String* outOwner, s64* outFileSize, char const* remoteBaseDir, char const* filename, char const* user, char const* myIp);
 
   String mFullLocalPath;
   String mUser;

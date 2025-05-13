@@ -120,7 +120,6 @@ bool load_config(std::string& filepath, std::string& user, std::string& sshHostn
       return false;
     }
 
-
     std::string line;
     while(std::getline(configFile, line))
     {
@@ -415,10 +414,16 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         char const* lblFile = "File: ";
         RECT rectRow0 = { COLUMN_1_OFFSET, ROW_0_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_0_OFFSET + ROW_0_HEIGHT };
         RECT rectRow1 = { COLUMN_1_OFFSET, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_1_OFFSET + ROW_1_HEIGHT };
-
+        
         DrawText(hdc, lblUser, -1, &rectRow0, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
         DrawText(hdc, lblFile, -1, &rectRow1, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
-
+        
+        //reserve state text
+        char lblReserveState[BSE_STACK_BUFFER_SMALL];
+        string_format(lblReserveState, sizeof(lblReserveState), "Reservation State: ");
+        RECT rectRow3 = { COLUMN_0_OFFSET, ROW_3_OFFSET, COLUMN_0_OFFSET + COLUMN_0_WIDTH + COLUMN_1_WIDTH, ROW_3_OFFSET + ROW_3_HEIGHT };
+        
+        DrawText(hdc, lblReserveState, -1, &rectRow3, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -545,13 +550,13 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 COLUMN_0_OFFSET, ROW_2_OFFSET, WINDOW_WIDTH, ROW_2_HEIGHT,
                 hwnd, (HMENU)HwndId::Text_Output, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
             
-            SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
             //FONT
             hOutputFont = CreateFont(
                 -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
                 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
                 FIXED_PITCH | FF_DONTCARE, "Consolas");
+            SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
             return 0;
         }
 
@@ -737,8 +742,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
         gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
     }
 
+    SetWindowText(hUserTextbox, gCoordinator.mUser.get_data());
+    SetWindowText(hFileTextbox, gCoordinator.mFullLocalPath.get_data());
+
     // Main message loop
-    while (poll_win_message(false)) {}
+    using clock = std::chrono::steady_clock;
+    auto nextReserveStatePoll = clock::now() + std::chrono::seconds(1);
+    while (poll_win_message(false)) 
+    {
+
+    }
 
     gCoordinator.shutdown_session();
     return 0;
