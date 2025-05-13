@@ -130,6 +130,9 @@ public:
   ssh_session mSession = nullptr;
 #ifdef NO_GODOT
   bool mAgreeAllPrompts = false;
+#ifdef FAC_WINGUI
+  bool (*mConfirmationDialogCallback)(const char*, const char*);
+#endif
 #else
   ConfirmationDialog* mConfirmationDialog = nullptr;
 #endif

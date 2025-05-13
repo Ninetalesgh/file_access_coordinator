@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(Windows) Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+           "program": "w:/file_access_coordinator/export/fac.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "w:/file_access_coordinator/export",
+            "environment": [],
+            "console": "newExternalWindow",
+        }
+    ]
+}

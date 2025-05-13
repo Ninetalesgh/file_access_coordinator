@@ -183,7 +183,19 @@ void AccessCoordinator::on_force_release_dialog_confirm()
 
 void AccessCoordinator::show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)())
 {
-#ifdef NO_GODOT
+#if defined(FAC_WINGUI)
+  if (mConfirmationDialogCallback)
+  {
+    if(mConfirmationDialogCallback(title.get_data(), message.get_data()))
+    {
+      (this->*on_confirm)();
+    }
+  }
+  else
+  {
+      (this->*on_confirm)();
+  }
+#elif defined(NO_GODOT) && !defined(FAC_WINGUI)
   std::string input;
   if (!mAgreeAllPrompts)
   {
