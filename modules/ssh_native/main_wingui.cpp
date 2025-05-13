@@ -317,6 +317,7 @@ HWND hUserTextbox;
 HWND hFileTextbox;
 HWND hOutputTextbox;
 
+HWND hReserveStateLabel;
 
 enum class HwndId : int
 {
@@ -331,7 +332,10 @@ enum class HwndId : int
     BUTTON_MAX,
     TEXT_MIN,
     Text_Output,
-    TEXT_MAX
+    TEXT_MAX,
+    LABEL_MIN,
+    Label_ReserveState,
+    LABEL_MAX,
 };
 
 char const* get_button_text(int buttonId)
@@ -393,6 +397,12 @@ COLORREF buttonForegroundColor = RGB(255, 255, 255);
 COLORREF windowBkColor = RGB(50, 50, 50);
 HFONT hOutputFont;
 
+ReserveState reserveState = ReserveState::UNKNOWN;
+//TODO
+bool reservedFileExistsLocally = true;
+bool reservedFileSizeDifferent = false;
+String reservedFileRemoteOwner;
+
 LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 {
     switch(uMsg)
@@ -417,13 +427,7 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         
         DrawText(hdc, lblUser, -1, &rectRow0, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
         DrawText(hdc, lblFile, -1, &rectRow1, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
-        
-        //reserve state text
-        char lblReserveState[BSE_STACK_BUFFER_SMALL];
-        string_format(lblReserveState, sizeof(lblReserveState), "Reservation State: ");
-        RECT rectRow3 = { COLUMN_0_OFFSET, ROW_3_OFFSET, COLUMN_0_OFFSET + COLUMN_0_WIDTH + COLUMN_1_WIDTH, ROW_3_OFFSET + ROW_3_HEIGHT };
-        
-        DrawText(hdc, lblReserveState, -1, &rectRow3, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
+    
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -557,6 +561,17 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
                 FIXED_PITCH | FF_DONTCARE, "Consolas");
             SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
+
+            //LABEL
+            hReserveStateLabel = CreateWindow(
+            "STATIC",
+            "",
+            WS_VISIBLE | WS_CHILD,            
+            COLUMN_0_OFFSET, ROW_3_OFFSET,
+            COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_HEIGHT,
+            hwnd,
+            (HMENU)HwndId::Label_ReserveState,
+            (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
             return 0;
         }
 
@@ -750,7 +765,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     auto nextReserveStatePoll = clock::now() + std::chrono::seconds(1);
     while (poll_win_message(false)) 
     {
+        auto now = clock::now();
+        if (now > nextReserveStatePoll)
+        {
+            nextReserveStatePoll += std::chrono::seconds(1);
+            s64 reservedFileSize;
+            //TODO deal with file not existing
+            reserveState = gCoordinator.get_reserve_state(&reservedFileRemoteOwner, &reservedFileSize);
+            char lblReserveState[BSE_STACK_BUFFER_SMALL];
+            if (reserveState == ReserveState::UNKNOWN)
+            {
+                string_format(lblReserveState, sizeof(lblReserveState), "File doesn't exist on the server.");
+            }
+            else if (reserveState == ReserveState::NOT_RESERVED)
+            {
+                string_format(lblReserveState, sizeof(lblReserveState), "File not reserved.");
+            }
+            else if (reserveState == ReserveState::RESERVED_BY_ME)
+            {
+                string_format(lblReserveState, sizeof(lblReserveState), "File reserved by you.");
+            }
+            else if (reserveState == ReserveState::RESERVED_BY_OTHER)
+            {
+                s64 ipOffset = reservedFileRemoteOwner.is_empty() ? 0 : string_find_last(reservedFileRemoteOwner.get_data(), ' ') - reservedFileRemoteOwner.get_data();
+                string_format(lblReserveState, sizeof(lblReserveState), "File reserved by '", reservedFileRemoteOwner.str.substr(0,ipOffset).c_str(), "'");
+            }
 
+            SetWindowText(hReserveStateLabel, lblReserveState);
+        }
     }
 
     gCoordinator.shutdown_session();

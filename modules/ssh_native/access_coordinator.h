@@ -76,6 +76,13 @@ enum class ReserveState : int
   RESERVED_BY_ME,
   RESERVED_BY_OTHER,
 };
+//TODO
+enum class DiffState : int
+{
+  UNKNOWN,
+  SAME,
+  DIFFERENT
+};
 
 #ifdef NO_GODOT
 class AccessCoordinator {

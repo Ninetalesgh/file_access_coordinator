@@ -694,8 +694,13 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
 
 ReserveState AccessCoordinator::get_reserve_state_of_remote_file(String* outOwner, s64* outFileSize, char const* remoteBaseDir, char const* filename, char const* user, char const* myIp)
 {
+  if (outOwner) *outOwner = "";
+  if (outFileSize) *outFileSize = 0;
+
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
+  responseBuffer[1] = '\0';
+  responseBuffer[2] = '\0';
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
   stringFormatBuffer[0] = '\0';
   //0 = file doesn't exist
@@ -704,9 +709,9 @@ ReserveState AccessCoordinator::get_reserve_state_of_remote_file(String* outOwne
   //C = owned by other followed by the name and ip of the owner
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
-               "' && if [ ! -f ", filename, " ]; then echo \"0\"; elif [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
+               "' && if [ ! -f ", filename, " ]; then echo \"0\"; elif [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
                "then echo \"A\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, 
-               "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation'); fi"); 
+               "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation')\"; fi"); 
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
 
   if (responseBuffer[0] == '0')
