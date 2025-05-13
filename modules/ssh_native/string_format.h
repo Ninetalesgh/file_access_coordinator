@@ -91,6 +91,7 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
 
   //replaces all of target with replacement
   void string_replace_char( char* str, char target, char replacement );
+  void string_replace_char( char* dest, s32 capacity, char const* source, char find, char const* replacement );
 
   //returns pointer to where subString begins in string
   //returns nullptr if the subString is not part of string
@@ -497,6 +498,32 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
     }
   }
 
+  void string_replace_char( char* dest, s32 capacity, char const* source, char find, char const* replacement )
+  {
+    s32 replacementLength = string_length(replacement);
+
+    while ( capacity > 0 )
+    {
+      if ( *source == find )
+      {
+        string_copy(dest, replacement, capacity);
+        dest += replacementLength;
+        capacity -= replacementLength;
+      }
+      else
+      {  
+        *dest++ = *source;
+        --capacity;
+      }
+      
+      if (*source == '\0')
+      {
+        break;
+      }
+
+      ++source;
+    }
+  }
 
   INLINE s32 string_line_count( char const* string )
   {

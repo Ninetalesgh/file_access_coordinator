@@ -1,6 +1,6 @@
 #define NO_GODOT
 #define FAC_WINGUI
-
+//#define POLL_WINDOWS_IN_SFTP_THREAD
 
 #include "access_coordinator.cpp"
 
@@ -18,11 +18,20 @@
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "uxtheme.lib")
+#pragma comment(lib, "comdlg32.lib")
 
 
 //I made this part c++17, it was easier to get going right away
-AccessCoordinator coordinator;
-bool running = true;
+AccessCoordinator gCoordinator;
+bool gRunning = true;
+
+#undef log_info
+#undef log_warning
+#undef log_error
+#define log_info( ... ) bse::debug::log(bse::debug::LogParameters(&gCoordinator, bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::ALL), __VA_ARGS__)
+#define log_warning( ... ) bse::debug::log(bse::debug::LogParameters(&gCoordinator, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL), __VA_ARGS__)
+#define log_error( ... ) bse::debug::log(bse::debug::LogParameters(&gCoordinator, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__)
+
 
 namespace fs = std::filesystem;
 
@@ -62,7 +71,7 @@ bool save_config()
     appData = "~/.local/share";
   }
 
-  if (!coordinator.is_current_base_config_valid())
+  if (!gCoordinator.is_current_base_config_valid())
   {
     std::cout << "- Error: current config is not valid, not writing to access.config.";
     return false;
@@ -76,19 +85,19 @@ bool save_config()
   std::ofstream configFileWriteStream(filePath);
   if (configFileWriteStream)
   {
-    configFileWriteStream << "filepath=" << coordinator.mFullLocalPath.str << '\n';
-    configFileWriteStream << "user=" << coordinator.mUser.str << '\n';
-    configFileWriteStream << "sshHostname=" << coordinator.mSshHostname.str << '\n';
-    configFileWriteStream << "sshUsername=" << coordinator.mSshUsername.str << '\n';
-    configFileWriteStream << "sshPassword=" << coordinator.mSshPassword.str << '\n';
-    configFileWriteStream << "remoteBaseDir=" << coordinator.mRemoteBaseDir.str << '\n';
+    configFileWriteStream << "filepath=" << gCoordinator.mFullLocalPath.str << '\n';
+    configFileWriteStream << "user=" << gCoordinator.mUser.str << '\n';
+    configFileWriteStream << "sshHostname=" << gCoordinator.mSshHostname.str << '\n';
+    configFileWriteStream << "sshUsername=" << gCoordinator.mSshUsername.str << '\n';
+    configFileWriteStream << "sshPassword=" << gCoordinator.mSshPassword.str << '\n';
+    configFileWriteStream << "remoteBaseDir=" << gCoordinator.mRemoteBaseDir.str << '\n';
     return true;
   }
 
   return false;
 }
 
-bool load_config()
+bool load_config(std::string& filepath, std::string& user, std::string& sshHostname, std::string& sshUsername, std::string& sshPassword, std::string& remoteBaseDir)
 {
   char const* appData = std::getenv("APPDATA");
   if (!appData)
@@ -111,12 +120,6 @@ bool load_config()
       return false;
     }
 
-    std::string filepath;
-    std::string user;
-    std::string sshHostname;
-    std::string sshUsername;
-    std::string sshPassword;
-    std::string remoteBaseDir;
 
     std::string line;
     while(std::getline(configFile, line))
@@ -147,22 +150,16 @@ bool load_config()
       }
     }
 
-    coordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
-  }
-  else
-  {
-    //use default values and save to config
-    coordinator.init(static_filepath, static_user, static_sshHostname, static_sshUsername, static_sshPassword, static_remoteBaseDir);
-    save_config();
+    return true;
   }
 
-  return true;
+  return false;
 }
 
 void print_current_context()
 {
-  std::cout << "Current user: " << coordinator.mUser.str << '\n';
-  std::cout << "Current file: " << coordinator.mFullLocalPath.str << '\n';
+  log_info("Current user: ", gCoordinator.mUser.get_data(), "\n");
+  log_info("Current file: ", gCoordinator.mFullLocalPath.get_data(), "\n");
 }
 
 int evaluate_expression(char const* expression)
@@ -174,27 +171,27 @@ int evaluate_expression(char const* expression)
   else if (string_begins_with(expression, "download"))
   {
     print_time();
-    coordinator.download();
+    gCoordinator.download();
   }
   else if (string_begins_with(expression, "upload"))
   {
     print_time();
-    coordinator.upload();
+    gCoordinator.upload();
   }
   else if (string_begins_with(expression, "reserve"))
   {
     print_time();
-    coordinator.reserve();
+    gCoordinator.reserve();
   }
   else if (string_begins_with(expression, "release"))
   {
     print_time();
-    coordinator.release(false);
+    gCoordinator.release(false);
   }
   else if (string_begins_with(expression, "forcerelease"))
   {
     print_time();
-    coordinator.release(true);
+    gCoordinator.release(true);
   }
   else if (string_begins_with(expression, "user"))
   {
@@ -213,7 +210,7 @@ int evaluate_expression(char const* expression)
       std::getline(std::cin, input);
     }
     std::cout << "Setting user to: " << input << '\n';
-    coordinator.mUser = input;
+    gCoordinator.mUser = input;
   }
   else if (string_begins_with(expression, "file"))
   {
@@ -232,12 +229,19 @@ int evaluate_expression(char const* expression)
       std::getline(std::cin, input);
     }
     std::cout << "Setting file to: " << input << '\n';
-    coordinator.set_filepath(input);
+    gCoordinator.set_filepath(input);
   }
   else if (string_begins_with(expression, "loadconfig"))
   {
-    if (load_config())
+    std::string filepath;
+    std::string user;
+    std::string sshHostname;
+    std::string sshUsername;
+    std::string sshPassword;
+    std::string remoteBaseDir;
+    if (load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir))
     {
+      gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);  
       std::cout << "Loaded access.config from disk.\n";
       print_current_context();
     }
@@ -256,7 +260,7 @@ int evaluate_expression(char const* expression)
   }
   else if (string_begins_with(expression, "agreeall"))
   {
-    coordinator.mAgreeAllPrompts = true; 
+    gCoordinator.mAgreeAllPrompts = true; 
   }
   else
   {
@@ -278,9 +282,27 @@ int evaluate_expression(char const* expression)
              "loadconfig -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
              "saveconfig -> Save the current configuration to access.config.\n"
              "exit -> Exits the application.\n"
-             "agreeall -> Confirms all file related prompts without asking, place as first argument if running from command line.\n";
+             "agreeall -> Confirms all file related prompts without asking, place as first argument if gRunning from command line.\n";
   }
   return true;
+}
+
+bool open_file_dialog(HWND hwndOwner, char* buffer, s64 bufferSize) {
+    OPENFILENAME ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwndOwner;
+    ofn.lpstrFile = buffer;
+    ofn.nMaxFile = (DWORD)bufferSize;
+    ofn.lpstrFilter = "Database Files\0*.sdb\0Text Files\0*.txt\0All Files\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.lpstrTitle = "Select a File";
+    //ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT;
+
+    return GetOpenFileName(&ofn);
 }
 
 HWND hButtonUpload;
@@ -289,8 +311,15 @@ HWND hButtonReserve;
 HWND hButtonRelease;
 HWND hButtonForceRelease;
 HWND hButtonSaveConfig;
+HWND hButtonOpenFile;
 
-enum class ButtonId : int
+HWND hMainWindow;
+HWND hUserTextbox;
+HWND hFileTextbox;
+HWND hOutputTextbox;
+
+
+enum class HwndId : int
 {
     BUTTON_MIN = 0,
     Button_Upload,
@@ -299,33 +328,61 @@ enum class ButtonId : int
     Button_Release,
     Button_ForceRelease,
     Button_SaveConfig,
-    BUTTON_MAX
+    Button_OpenFile,
+    BUTTON_MAX,
+    TEXT_MIN,
+    Text_Output,
+    TEXT_MAX
 };
 
 char const* get_button_text(int buttonId)
 {
     switch(buttonId)
     {
-        case ButtonId::Button_Upload: return "Upload";
-        case ButtonId::Button_Download: return "Download";
-        case ButtonId::Button_Reserve: return "Reserve";
-        case ButtonId::Button_Release: return "Release";
-        case ButtonId::Button_ForceRelease: return "Force Release";
-        case ButtonId::Button_SaveConfig: return "Save Config";
+        case HwndId::Button_Upload: return "Upload";
+        case HwndId::Button_Download: return "Download";
+        case HwndId::Button_Reserve: return "Reserve";
+        case HwndId::Button_Release: return "Release";
+        case HwndId::Button_ForceRelease: return "Force Release";
+        case HwndId::Button_SaveConfig: return "Save Config";
     }
     return "";
 }
 
-HWND hMainWindow;
-HWND hUserTextbox;
-HWND hFileTextbox;
-HWND hOutputTextbox;
-
-#define BUTTON_HEIGHT 20
-#define BUTTON_WIDTH 100
-#define TEXTBOX_HEIGHT 20
-#define TEXTBOX_WIDTH 200
 #define UI_PADDING 2
+
+#define COLUMN_0_WIDTH 100 
+#define COLUMN_1_WIDTH 40
+#define COLUMN_2_WIDTH 420
+#define COLUMN_3_WIDTH 100
+
+#define ROW_0_HEIGHT 20
+#define ROW_1_HEIGHT 20
+#define ROW_2_HEIGHT 500
+#define ROW_3_HEIGHT 20
+#define ROW_4_HEIGHT 0
+#define ROW_5_HEIGHT 0
+
+#define COLUMN_0_OFFSET UI_PADDING
+#define COLUMN_1_OFFSET COLUMN_0_WIDTH + COLUMN_0_OFFSET + UI_PADDING
+#define COLUMN_2_OFFSET COLUMN_1_WIDTH + COLUMN_1_OFFSET + UI_PADDING
+#define COLUMN_3_OFFSET COLUMN_2_WIDTH + COLUMN_2_OFFSET + UI_PADDING
+#define COLUMN_4_OFFSET COLUMN_3_WIDTH + COLUMN_3_OFFSET + UI_PADDING
+
+
+#define ROW_0_OFFSET UI_PADDING
+#define ROW_1_OFFSET ROW_0_HEIGHT + ROW_0_OFFSET + UI_PADDING
+#define ROW_2_OFFSET ROW_1_HEIGHT + ROW_1_OFFSET + UI_PADDING
+#define ROW_3_OFFSET ROW_2_HEIGHT + ROW_2_OFFSET + UI_PADDING
+#define ROW_4_OFFSET ROW_3_HEIGHT + ROW_3_OFFSET + UI_PADDING
+#define ROW_5_OFFSET ROW_4_HEIGHT + ROW_4_OFFSET + UI_PADDING
+#define ROW_6_OFFSET ROW_5_HEIGHT + ROW_5_OFFSET + UI_PADDING
+
+#define WINDOW_WIDTH  COLUMN_4_OFFSET
+#define WINDOW_HEIGHT ROW_3_OFFSET
+
+#define BUTTON_STYLE BS_PUSHBUTTON
+// #define BUTTON_STYLE BS_OWNERDRAW
 
 HBRUSH hTextBoxBrush;
 HBRUSH hButtonBrush;
@@ -335,8 +392,83 @@ COLORREF textForegroundColor = RGB(200,200,200);
 COLORREF buttonBkColor = RGB(75, 75, 75);
 COLORREF buttonForegroundColor = RGB(255, 255, 255);
 COLORREF windowBkColor = RGB(50, 50, 50);
+HFONT hOutputFont;
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
+{
+    switch(uMsg)
+    {
+    case WM_DESTROY:
+        DeleteObject(hTextBoxBrush);
+        DeleteObject(hWindowBrush);
+        DeleteObject(hButtonBrush);
+        PostQuitMessage(0);
+        return 0;
+    case WM_PAINT: 
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        SetTextColor(hdc, textForegroundColor);
+        SetBkColor(hdc, windowBkColor);
+
+        char const* lblUser = "User: ";
+        char const* lblFile = "File: ";
+        RECT rectRow0 = { COLUMN_1_OFFSET, ROW_0_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_0_OFFSET + ROW_0_HEIGHT };
+        RECT rectRow1 = { COLUMN_1_OFFSET, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_1_OFFSET + ROW_1_HEIGHT };
+
+        DrawText(hdc, lblUser, -1, &rectRow0, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
+        DrawText(hdc, lblFile, -1, &rectRow1, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_DRAWITEM:
+    {
+        LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
+        if (dis->CtlID > (int)HwndId::BUTTON_MIN && dis->CtlID < (int)HwndId::BUTTON_MAX) {
+            // Fill background
+            FillRect(dis->hDC, &dis->rcItem, hButtonBrush);
+            // Draw button text
+            SetTextColor(dis->hDC, buttonForegroundColor);
+            SetBkColor(dis->hDC, buttonBkColor);
+            //SetBkMode(dis->hDC, TRANSPARENT);
+            DrawText(dis->hDC, get_button_text(dis->CtlID), -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            return TRUE;
+        }
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORBTN:
+    {
+        HDC hdc = (HDC)wParam;
+        SetTextColor(hdc, textForegroundColor);
+        SetBkColor(hdc, textBkColor);
+        if((HWND)lParam == hButtonUpload
+        || (HWND)lParam == hButtonDownload
+        || (HWND)lParam == hButtonReserve
+        || (HWND)lParam == hButtonRelease
+        || (HWND)lParam == hButtonForceRelease
+        || (HWND)lParam == hButtonSaveConfig)
+        {
+            SetTextColor(hdc, buttonForegroundColor);
+            SetBkColor(hdc, buttonBkColor);
+            return (INT_PTR)hButtonBrush;
+        }
+        return (INT_PTR)hTextBoxBrush;
+    }
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+bool gOnlyProcEssentials = false;
+LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    char buffer[BSE_STACK_BUFFER_SMALL];
+    if (gOnlyProcEssentials)
+    {
+        return window_proc_essentials(hwnd, uMsg, wParam, lParam);
+    }
+
     switch (uMsg) {
         case WM_CREATE:
         {
@@ -350,163 +482,152 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             hTextBoxBrush = CreateSolidBrush(textBkColor);
             hButtonBrush = CreateSolidBrush(buttonBkColor);
 
-            hUserTextbox = CreateWindowEx(
-                0, "EDIT", "", 
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
-                BUTTON_WIDTH + UI_PADDING * 2, TEXTBOX_HEIGHT * 0 + UI_PADDING * 1, TEXTBOX_WIDTH, TEXTBOX_HEIGHT,  // x, y, width, height
-                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hFileTextbox = CreateWindowEx(
-                0, "EDIT", "", 
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
-                BUTTON_WIDTH + UI_PADDING * 2, TEXTBOX_HEIGHT * 1 + UI_PADDING * 2, TEXTBOX_WIDTH, TEXTBOX_HEIGHT,  // x, y, width, height
-                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
+            // BUTTONS
             hButtonUpload = CreateWindow(
                 "BUTTON", "Upload",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 1 + BUTTON_HEIGHT * 0, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_Upload, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_0_OFFSET, ROW_0_OFFSET, COLUMN_0_WIDTH, ROW_0_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_Upload, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
             hButtonDownload = CreateWindow(
                 "BUTTON", "Download",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 2 + BUTTON_HEIGHT * 1, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_Download, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_0_OFFSET, ROW_1_OFFSET, COLUMN_0_WIDTH, ROW_1_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_Download, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
             hButtonReserve = CreateWindow(
                 "BUTTON", "Reserve",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 3 + BUTTON_HEIGHT * 2, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_Reserve, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_Reserve, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
             hButtonRelease = CreateWindow(
                 "BUTTON", "Release",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 4 + BUTTON_HEIGHT * 3, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_Release, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_3_OFFSET - COLUMN_1_OFFSET - 3 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_Release, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
             hButtonForceRelease = CreateWindow(
                 "BUTTON", "Force Release",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 5 + BUTTON_HEIGHT * 4, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_ForceRelease, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_3_OFFSET, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_ForceRelease, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
-            hButtonSaveConfig = CreateWindow(
-                "BUTTON", "Save Config",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                UI_PADDING * 1, UI_PADDING * 6 + BUTTON_HEIGHT * 5, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd, (HMENU)ButtonId::Button_SaveConfig, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+            // hButtonSaveConfig = CreateWindow(
+            //     "BUTTON", "Save Config",
+            //     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+            //     COLUMN_0_OFFSET, ROW_5_OFFSET, COLUMN_0_WIDTH, ROW_5_HEIGHT,
+            //     hwnd, (HMENU)HwndId::Button_SaveConfig, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+            // );
+            hButtonOpenFile = CreateWindow(
+                "BUTTON", "Browse Files",
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+                COLUMN_3_OFFSET, ROW_1_OFFSET, COLUMN_3_WIDTH, ROW_1_HEIGHT,
+                hwnd, (HMENU)HwndId::Button_OpenFile, ((LPCREATESTRUCT)lParam)->hInstance, NULL
             );
+            
+            //TEXT FIELDS
+            hUserTextbox = CreateWindowEx(
+                0, "EDIT", gCoordinator.mUser.get_data(), 
+                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
+                COLUMN_2_OFFSET, ROW_0_OFFSET, COLUMN_2_WIDTH, ROW_0_HEIGHT,  // x, y, width, height
+                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+            );
+            hFileTextbox = CreateWindowEx(
+                0, "EDIT", gCoordinator.mFullLocalPath.get_data(), 
+                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL,
+                COLUMN_2_OFFSET, ROW_1_OFFSET, COLUMN_2_WIDTH, ROW_1_HEIGHT,  // x, y, width, height
+                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+            );
+            hOutputTextbox = CreateWindowEx(
+                0, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY,
+                COLUMN_0_OFFSET, ROW_2_OFFSET, WINDOW_WIDTH, ROW_2_HEIGHT,
+                hwnd, (HMENU)HwndId::Text_Output, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+            
+            SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
+            //FONT
+            hOutputFont = CreateFont(
+                -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+                0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                FIXED_PITCH | FF_DONTCARE, "Consolas");
             return 0;
         }
-        case WM_DESTROY:
-            DeleteObject(hTextBoxBrush);
-            DeleteObject(hWindowBrush);
-            DeleteObject(hButtonBrush);
-            PostQuitMessage(0);
-            return 0;
-        case WM_PAINT: 
-        {
-            return 0;
-        }
-        case WM_DRAWITEM:
-        {
-            LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
-            if (dis->CtlID > (int)ButtonId::BUTTON_MIN && dis->CtlID < (int)ButtonId::BUTTON_MAX) {
-                // Fill background
-                FillRect(dis->hDC, &dis->rcItem, hButtonBrush);
-                // Draw button text
-                SetTextColor(dis->hDC, buttonForegroundColor);
-                SetBkColor(dis->hDC, buttonBkColor);
-                //SetBkMode(dis->hDC, TRANSPARENT);
-                DrawText(dis->hDC, get_button_text(dis->CtlID), -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-                return TRUE;
-            }
-            return 0;
-        }
+
         case WM_COMMAND:
         {
-            char buffer[BSE_STACK_BUFFER_SMALL];
             buffer[0] = '\0';
             GetWindowText(hUserTextbox, buffer, sizeof(buffer));
-            if (buffer[0]) coordinator.mUser = buffer;
+            if (buffer[0]) gCoordinator.mUser = buffer;
             buffer[0] = '\0';
             GetWindowText(hFileTextbox, buffer, sizeof(buffer));
-            if (buffer[0]) coordinator.set_filepath(String(buffer));
-            
-            switch (LOWORD(wParam))
+            if (buffer[0]) gCoordinator.set_filepath(String(buffer));
+            if (HIWORD(wParam) == BN_CLICKED)
             {
-                case (int)ButtonId::Button_Upload:
+                switch (LOWORD(wParam))
                 {
-                    printf("upload clicked");
-                    coordinator.upload();
-                    break;
+                    case (int)HwndId::Button_Upload:
+                    {
+                        gCoordinator.upload();
+                        break;
+                    }
+                    case (int)HwndId::Button_Download:
+                    {
+                        gCoordinator.download();
+                        break;
+                    }
+                    case (int)HwndId::Button_Reserve:
+                    {
+                        gCoordinator.reserve();
+                        break;
+                    }
+                    case (int)HwndId::Button_Release:
+                    {
+                        gCoordinator.release(false);
+                        break;
+                    }
+                    case (int)HwndId::Button_ForceRelease:
+                    {
+                        gCoordinator.release(true);
+                        break;
+                    }
+                    case (int)HwndId::Button_SaveConfig:
+                    {
+                        save_config();
+                        string_format(buffer, sizeof(buffer), "Config Saved.\nSaved user: ", gCoordinator.mUser.get_data(),"\nSaved file: ", gCoordinator.mFullLocalPath.get_data() );
+                        MessageBox(hwnd, buffer, "Config Saved!", MB_OK);
+                        break;
+                    }
+                    case (int)HwndId::Button_OpenFile:
+                    {
+                        buffer[0] = '\n';
+                        string_format(buffer, sizeof(buffer), gCoordinator.mFullLocalPath.get_data());
+                        if (open_file_dialog(hMainWindow, buffer, sizeof(buffer)))
+                        {
+                            gCoordinator.set_filepath(buffer);
+                            SetWindowText(hFileTextbox, buffer);
+                            save_config();
+                        }
+                        break;
+                    }
+                    default:
+                    {}
                 }
-                case (int)ButtonId::Button_Download:
-                {
-                    printf("download clicked");
-                    coordinator.download();
-                    break;
-                }
-                case (int)ButtonId::Button_Reserve:
-                {
-                    printf("reserve clicked");
-                    coordinator.reserve();
-                    break;
-                }
-                case (int)ButtonId::Button_Release:
-                {
-                    printf("release clicked");
-                    coordinator.release(false);
-                    break;
-                }
-                case (int)ButtonId::Button_ForceRelease:
-                {
-                    printf("release clicked");
-                    coordinator.release(true);
-                    break;
-                }
-                case (int)ButtonId::Button_SaveConfig:
-                {
-                    save_config();
-                    MessageBox(hwnd, ".", "Config Saved!", MB_OK);
-                    break;
-                }
-                default:
-                {}
             }
             return 0;
         }
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORBTN: {
-            HDC hdc = (HDC)wParam;
-            SetTextColor(hdc, textForegroundColor);
-            SetBkColor(hdc, textBkColor);
-
-            if((HWND)lParam == hButtonUpload
-            || (HWND)lParam == hButtonDownload
-            || (HWND)lParam == hButtonReserve
-            || (HWND)lParam == hButtonRelease
-            || (HWND)lParam == hButtonForceRelease
-            || (HWND)lParam == hButtonSaveConfig)
-            {
-                SetTextColor(hdc, buttonForegroundColor);
-                SetBkColor(hdc, buttonBkColor);
-                return (INT_PTR)hButtonBrush;
-            }
-
-            return (INT_PTR)hTextBoxBrush;
-        }
     }
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+
+    return window_proc_essentials(hwnd, uMsg, wParam, lParam);
 }
 
-bool poll_win_message()
+bool poll_win_message(bool onlyEssentials)
 {
+    gOnlyProcEssentials = onlyEssentials;
     MSG msg = {};
     if (GetMessage(&msg, NULL, 0, 0)) {
+       
         TranslateMessage(&msg);
         DispatchMessage(&msg);
         return true;
@@ -515,24 +636,42 @@ bool poll_win_message()
     return false;
 }
 
-bool confirm_dialog_callback(char const* title, char const* message)
-{
-    if (title && message)
-    {
-        SetForegroundWindow(hMainWindow);
-        int result = MessageBox(
-            NULL,
-            message,
-            title,
-            MB_YESNO | MB_ICONQUESTION | MB_TOPMOST
-        );
-        return result == IDYES;
-    }
+s32 lastNewlineIndex = 0;
 
-    return false;
+void fetch_new_log_callback()
+{
+    char const* log = gCoordinator.fetch_output().get_data();
+    if (*log)
+    {
+        int len = GetWindowTextLength(hOutputTextbox);
+        int start = len;
+        bool overwriteLastLine = log[0] == '\r' && log[1] != '\n';
+        char const* last = string_find_last(log, '\n');
+        if (last)
+        {
+            lastNewlineIndex = len + int(last - log);
+        }
+        
+        if (overwriteLastLine)
+        {
+            start = lastNewlineIndex + 1;
+        }
+        
+        SendMessage(hOutputTextbox, EM_SETSEL, start, len);
+        SendMessage(hOutputTextbox, EM_REPLACESEL, FALSE, (LPARAM)log);
+    }
 }
 
-// Entry point
+bool confirm_dialog_callback(char const* title, char const* message)
+{
+    int result = MessageBox(
+        hMainWindow,
+        message,
+        title,
+        MB_YESNO | MB_ICONQUESTION | MB_TOPMOST);
+    return result == IDYES;
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdShow) 
 {
     const char CLASS_NAME[] = "File Access Coordinator";
@@ -541,18 +680,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     freopen("CONIN$", "r", stdin);    // Redirect stdin
     freopen("CONOUT$", "w", stderr);  // Redirect stderr
 
-    load_config();
-    coordinator.mConfirmationDialogCallback = &confirm_dialog_callback;
+    gCoordinator.mConfirmationDialogCallback = &confirm_dialog_callback;
+    gCoordinator.mNewLogSignal = &fetch_new_log_callback;
+    gCoordinator.mWindowMessageCallback = &poll_win_message;
     hWindowBrush = CreateSolidBrush(windowBkColor);
     // Register window class
     WNDCLASS wc = {};
-    wc.lpfnWndProc   = WindowProc;
+    wc.lpfnWndProc   = window_proc;
     wc.hInstance     = hInstance;
     wc.lpszClassName = CLASS_NAME;
     wc.hbrBackground = hWindowBrush;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
 
     RegisterClass(&wc);
+
+    std::string filepath;
+    std::string user;
+    std::string sshHostname;
+    std::string sshUsername;
+    std::string sshPassword;
+    std::string remoteBaseDir;
+    bool needToLoadDefault = !load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
+
+    RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
+    AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, true, WS_EX_OVERLAPPEDWINDOW);
 
     // Create the window
     hMainWindow = CreateWindowEx(
@@ -561,7 +712,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
         "File Access Coordinator",   // Window title
         WS_OVERLAPPEDWINDOW,        // Window style
         // Position and size
-        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
         NULL,       // Parent window    
         NULL,       // Menu
         hInstance,  // Instance handle
@@ -576,9 +727,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     ShowWindow(hMainWindow, nCmdShow);
     UpdateWindow(hMainWindow);
 
-    // Main message loop
-    while (poll_win_message()) {}
+    if (needToLoadDefault)
+    {
+        gCoordinator.init(static_filepath, static_user, static_sshHostname, static_sshUsername, static_sshPassword, static_remoteBaseDir);
+        save_config();
+    }
+    else
+    {
+        gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
+    }
 
-    coordinator.shutdown_session();
+    // Main message loop
+    while (poll_win_message(false)) {}
+
+    gCoordinator.shutdown_session();
     return 0;
 }

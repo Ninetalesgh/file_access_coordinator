@@ -24,8 +24,14 @@ void AccessCoordinator::_bind_methods()
 
 String AccessCoordinator::fetch_output()
 {
-  //This entire output forwarding thing is messy, but for the sake of this program and the time I want to put into it.. what can you do.
+  #if defined(FAC_WINGUI)
+  char buffer[BSE_STACK_BUFFER_SMALL];
+  buffer[0] = '\0';
+  string_replace_char(buffer, sizeof(buffer), output.get_data(), '\n', "\r\n");
+  String result = buffer;
+  #else
   String result = output;
+  #endif
   output = "";
   return result;
 }
@@ -350,7 +356,10 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   int bytesRead;
 
   using clock = std::chrono::steady_clock;
-  auto nextClock = clock::now() + std::chrono::seconds(1);
+  auto nextLogClock = clock::now() + std::chrono::seconds(1);
+#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
+  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(30);
+#endif
 
   int bytesSinceLastSecond = 0;
   while ((bytesRead = (int)fread(buffer,1, sizeof(buffer), localFile)) > 0)
@@ -363,18 +372,34 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
 
     bytesSinceLastSecond += bytesRead;
     auto now = clock::now();
-    if (now >= nextClock)
+    if (now >= nextLogClock)
     {
-      nextClock += std::chrono::seconds(1);
+      nextLogClock += std::chrono::seconds(1);
       string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", mFullRemotePath.utf8().get_data(), "')\"");
       request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
       s64 remoteFileBytes = 0;
       string_parse_value(responseBuffer, &remoteFileBytes);
+#if defined(FAC_WINGUI)
+      log_info("\rProgress: ", remoteFileBytes, "/", localFileSize, " Bytes -- Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
+#else
       std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+#endif
       bytesSinceLastSecond = 0;   
     }
+#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
+    now = clock::now();
+    if (now >= nextWindowPollClock)
+    {
+      nextWindowPollClock += std::chrono::milliseconds(30);
+      mWindowMessageCallback(true);
+    }
+#endif
   }
+#if defined(FAC_WINGUI)
+  log_info("\rProgress: Done! ");
+#else
   std::cout << "\r\n";
+#endif
 
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
@@ -455,7 +480,10 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   int bytesRead;
 
   using clock = std::chrono::steady_clock;
-  auto nextClock = clock::now() + std::chrono::seconds(1);
+  auto nextLogClock = clock::now() + std::chrono::seconds(1);
+#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
+  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(30);
+#endif
   s64 bytesSinceLastSecond = 0;
   s64 totalBytesRead = 0;
   while ((bytesRead = (int)sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
@@ -469,15 +497,31 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     auto now = clock::now();
     bytesSinceLastSecond += bytesRead;
     totalBytesRead += bytesRead;
-    if (now >= nextClock)
+    if (now >= nextLogClock)
     {
-      nextClock += std::chrono::seconds(1);
-      std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+      nextLogClock += std::chrono::seconds(1);
+#if defined(FAC_WINGUI)
+      log_info("\rProgress: ", totalBytesRead, "/", remoteFileSize, " Bytes -- Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
+#else
+  std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+#endif
+
       bytesSinceLastSecond = 0;
     }
+#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
+    now = clock::now();
+    if (now >= nextWindowPollClock)
+    {
+      nextWindowPollClock += std::chrono::milliseconds(30);
+      mWindowMessageCallback(true);
+    }
+#endif
   }
-  
+#if defined(FAC_WINGUI)
+  log_info("\rProgress: Done! ");
+#else
   std::cout << "\r\n";
+#endif
 
   if (bytesRead < 0)
   {

@@ -17,12 +17,13 @@
 ///// These are working even with BSE_BUILD_RELEASE.                      ////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef FAC_WINGUI && defined(NO_GODOT)
+#define log_info( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
+#define log_warning( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
+#define log_error( ... ) bse::debug::log({bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL}, __VA_ARGS__)
+#else
 #define log_info( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_INFO, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 #define log_warning( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL), __VA_ARGS__)
-
-#if defined(BSE_BUILD_DEBUG)
-#define log_error( ... ) { BREAK; bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__); }
-#else 
 #define log_error( ... ) bse::debug::log(bse::debug::LogParameters(this, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 #endif
 
@@ -86,6 +87,13 @@ namespace bse
     };
     BSE_DEFINE_ENUM_OPERATORS_U8( LogOutputType );
 
+#ifndef FAC_WINGUI && defined(NO_GODOT)
+    struct LogParameters
+    {
+      LogSeverity severity;
+      LogOutputType type;
+    };
+#else
     struct LogParameters
     {
       AccessCoordinator* forwardInstance;
@@ -96,67 +104,67 @@ namespace bse
         , severity(_severity)
         , type(_type){}
     };
-
+#endif
     //forward trivial messages directly to the output
     void _log(LogParameters const& parameters, char const* message ) 
     {  
       if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_INFO)
       {
-        #ifdef NO_GODOT
+        #ifndef FAC_WINGUI && defined(NO_GODOT)
         printf(message);
         #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
-        }
-        else
-        {
-          __print_line(message);
+          if (parameters.forwardInstance->mNewLogSignal)
+          {
+            parameters.forwardInstance->mNewLogSignal();
+          }
         }
         #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_VERBOSE)
       {
-        #ifdef NO_GODOT
+        #ifndef FAC_WINGUI && defined(NO_GODOT)
         printf(message);
         #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
-        }
-        else
-        {
-          __print_line(message);
+          if (parameters.forwardInstance->mNewLogSignal)
+          {
+            parameters.forwardInstance->mNewLogSignal();
+          }
         }
         #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_WARNING)
       {
-        #ifdef NO_GODOT
+        #ifndef FAC_WINGUI && defined(NO_GODOT)
         printf(message);
         #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
-        }
-        else
-        {
-          WARN_PRINT_ED(message);
+          if (parameters.forwardInstance->mNewLogSignal)
+          {
+            parameters.forwardInstance->mNewLogSignal();
+          }
         }
         #endif
       }
       else if (parameters.severity == LogSeverity::BSE_LOG_SEVERITY_ERROR)
       {
-        #ifdef NO_GODOT
+        #ifndef FAC_WINGUI && defined(NO_GODOT)
         printf(message);
         #else
         if (parameters.forwardInstance)
         {
           parameters.forwardInstance->output += message;
-        }
-        else
-        {
-          ERR_PRINT_ED(message);
+          if (parameters.forwardInstance->mNewLogSignal)
+          {
+            parameters.forwardInstance->mNewLogSignal();
+          }
         }
         #endif
       }
@@ -168,7 +176,7 @@ namespace bse
       s32 bytesToWrite = string_format( debugBuffer, BSE_STACK_BUFFER_LARGE - 1, args... ) - 1 /* ommit null */;
       if ( bytesToWrite > 0 )
       {
-        if ( debugBuffer[bytesToWrite - 1] != '\n' )
+        if ( debugBuffer[bytesToWrite - 1] != '\n' && !(debugBuffer[0] == '\r' && debugBuffer[1] != '\n'))
         {
           debugBuffer[bytesToWrite++] = '\n';
         }

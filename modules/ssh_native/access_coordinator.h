@@ -27,9 +27,23 @@ struct String {
       return String(str);
     }
   }
+  String get_path()
+  {
+    auto pos = str.find_last_of("/\\");
+    if (pos != std::string::npos)
+    {
+      return str.substr(0, pos);
+    }
+    else
+    {
+      return String();
+    }
+  }
+
   std::string str;
   String const& operator =(String const& other) { str = other.get_data(); return *this;}
   String const& operator =(char const* other) { str = other; return *this;}
+  String const& operator +=(char const* other) { str += other; return *this;}
 
   friend bool operator ==(String a, String const b) {return a.str == b.str;}
 };
@@ -132,10 +146,12 @@ public:
   bool mAgreeAllPrompts = false;
 #ifdef FAC_WINGUI
   bool (*mConfirmationDialogCallback)(const char*, const char*);
-#endif
-#else
+  bool (*mWindowMessageCallback)(bool);
+  void (*mNewLogSignal)();
+  #endif
+  #else
   ConfirmationDialog* mConfirmationDialog = nullptr;
-#endif
+  #endif
   Vector<String> mReservedFileCache;
 };
 

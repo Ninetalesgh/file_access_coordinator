@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "xstring": "cpp"
+        "xstring": "cpp",
+        "system_error": "cpp",
+        "string": "cpp"
     }
 }
