@@ -50,7 +50,7 @@ bool save_config()
   if (!appData)
   {
     std::cerr << "APPDATA environment variable not found.\n";
-    return false;
+    appData = "~/.local/share";
   }
 
   if (!coordinator.is_current_base_config_valid())
@@ -85,7 +85,7 @@ bool load_config()
   if (!appData)
   {
     std::cerr << "APPDATA environment variable not found.\n";
-    return false;
+    appData = "~/.local/share";
   }
 
   fs::path targetPath = fs::path(appData) / "Godot" / "app_userdata" / "file_access_coordinator";
@@ -225,7 +225,7 @@ int evaluate_expression(char const* expression)
     std::cout << "Setting file to: " << input << '\n';
     coordinator.set_filepath(input);
   }
-  else if (string_begins_with(expression, "init"))
+  else if (string_begins_with(expression, "loadconfig"))
   {
     if (load_config())
     {
@@ -233,7 +233,7 @@ int evaluate_expression(char const* expression)
       print_current_context();
     }
   }
-  else if (string_begins_with(expression, "save"))
+  else if (string_begins_with(expression, "saveconfig"))
   {
     if (save_config())
     {
@@ -252,16 +252,22 @@ int evaluate_expression(char const* expression)
   else
   {
     std::cout << "Command unknown, available expressions are:\n"
-             "show -> Shows current user and filepath.\n"
+             "----------------------------------------------\n"
+             "--- Primary File Commands --------------------\n"
              "download -> Downloads the configured file from the server, overwriting your local version.\n"
-             "upload -> Uploads your local version to the server, overwriting the remote version.\n"
+             "upload -> Uploads your local version of the file to the server, overwriting the remote version.\n"
+             "----------------------------------------------\n"
+             "--- Secondary File Commands ------------------\n"
              "reserve -> Explicitly reserve the remote file for your current user and IP without otherwise manipulating files.\n"
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
              "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
+             "----------------------------------------------\n"
+             "--- Local & Config Commands ------------------\n"
+             "show -> Shows current context user and filepath.\n"
              "user -> Set the current context user (user=\"example\" to input the prompt directly).\n"
              "file -> Set the current context filepath (file=\"example filepath\" to input the prompt directly).\n"
-             "init -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
-             "save -> Save the current configuration to access.config.\n"
+             "loadconfig -> Reloads configuration from access.config, useful if you made manual changes to access.config.\n"
+             "saveconfig -> Save the current configuration to access.config.\n"
              "exit -> Exits the application.\n"
              "agreeall -> Confirms all file related prompts without asking, place as first argument if running from command line.\n";
   }

@@ -1,4 +1,5 @@
 #include "debug.h"
+#include "string_format.h"
 
 #ifndef S_IRUSR
 #define	S_IRUSR	0400
@@ -109,6 +110,9 @@ bool AccessCoordinator::set_filepath(String filepath)
 {
   mFullLocalPath = filepath;
   mFilename = mFullLocalPath.get_file();
+  char fullRemotePath[BSE_STACK_BUFFER_SMALL];
+  string_format(fullRemotePath, sizeof(fullRemotePath), mRemoteBaseDir.utf8().get_data(), "/", mFilename.utf8().get_data());
+  mFullRemotePath = fullRemotePath;
   return true;
 }
 
@@ -119,8 +123,9 @@ bool AccessCoordinator::init(String filepath, String user, String sshHostname, S
     shutdown_session();
   }
   
-  set_filepath(filepath);
-  
+  mFullLocalPath = filepath;
+  mFilename = mFullLocalPath.get_file();
+
   mUser = user;
   mSshUsername = sshUsername;
   mSshHostname = sshHostname;
@@ -275,7 +280,6 @@ int AccessCoordinator::request_exec(char const* request)
 
 int AccessCoordinator::log_section_exit_return_error()
 {
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
   return SSH_ERROR;
 }
@@ -283,9 +287,7 @@ int AccessCoordinator::log_section_exit_return_error()
 int AccessCoordinator::upload_file(const char* localPath, char const* remotePath)
 {
   log_info("\n==============================================");
-  log_info("----------------------------------------------");
   log_info("--- Uploading File ---------------------------");
-  log_info("----------------------------------------------");
 
   log_info("- Attempting to upload '", localPath, "' as '", remotePath, "'");
 
@@ -307,7 +309,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   FILE* localFile = fopen(localPath, "rb");
   if (!localFile)
   {
-    log_error("- Error opening local file: ", localPath);
+    log_error("- Error opening local file '", localPath, "', are you sure it exists?");
     sftp_free(sftp);
     return log_section_exit_return_error();
   }
@@ -320,7 +322,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     return log_section_exit_return_error();
   }
 
-  char buffer[4096];
+  char buffer[BSE_STACK_BUFFER_HUGE];
   int bytesRead;
   while ((bytesRead = (int)fread(buffer,1, sizeof(buffer), localFile)) > 0)
   {
@@ -331,7 +333,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     }
   }
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
+  char stringFormatBuffer[BSE_STACK_BUFFER_GARGANTUAN];
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
 
@@ -357,7 +359,6 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     result = SSH_ERROR;
   }
 
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
 
   sftp_close(remoteFile);
@@ -369,9 +370,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
 int AccessCoordinator::download_file(char const* localPath, char const* remotePath)
 {
   log_info("\n==============================================");
-  log_info("----------------------------------------------");
   log_info("--- Downloading File -------------------------");
-  log_info("----------------------------------------------");
   
   log_info("- Attempting to download '", remotePath, "' as '", localPath, "'");
 
@@ -400,13 +399,13 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   FILE* localFile = fopen(localPath, "wb");
   if (!localFile)
   {
-    log_error("- Error opening local file: ", localPath);
+    log_error("- Error opening local file '", localPath, "', are you sure it exists?");
     sftp_close(remoteFile);
     sftp_free(sftp);
     return log_section_exit_return_error();
   }
 
-  char buffer[4096];
+  char buffer[BSE_STACK_BUFFER_GARGANTUAN];
   int bytesRead;
   while ((bytesRead = (int)sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
   {
@@ -446,7 +445,6 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     bytesRead = -1;
   }
 
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
 
   fclose(localFile);
@@ -458,9 +456,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 int AccessCoordinator::_init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword)
 {
   log_info("\n==============================================");
-  log_info("----------------------------------------------");
   log_info("--- Launching Access Session -----------------");
-  log_info("----------------------------------------------");
 
   mSession = ssh_new();
 
@@ -504,7 +500,6 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
   log_info("- User: ", user);
   log_info("- Local IP: ", mIpAddress);
 
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
 
   return SSH_OK;
@@ -525,9 +520,7 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   }
 
   log_info("\n==============================================");
-  log_info("----------------------------------------------");
   log_info("--- Reserving File ---------------------------");
-  log_info("----------------------------------------------");
   log_info("- Attempting to reserve '", filename, "' for user '", user, "' with ip '", myIp, "'");
 
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
@@ -549,7 +542,6 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
 
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
 
   int result = string_begins_with(responseBuffer, "- C") ? SSH_ERROR : SSH_OK;
@@ -568,9 +560,7 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   if (cached >= 0) mReservedFileCache.remove_at(cached);
 
   log_info("\n==============================================");
-  log_info("----------------------------------------------");
   log_info("--- Releasing File ---------------------------");
-  log_info("----------------------------------------------");
 
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
   stringFormatBuffer[0] = '\0';
@@ -581,7 +571,7 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   {
     string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
-               " && chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\""); 
+               " && chmod +w '", filename, "' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\" && truncate -s 0 '_", filename, "reservation'"); 
   }
   else
   {
@@ -595,7 +585,6 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
 
-  log_info("----------------------------------------------");
   log_info("==============================================\n");
 
   return SSH_OK;

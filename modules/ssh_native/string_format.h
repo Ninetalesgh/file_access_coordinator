@@ -45,9 +45,12 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
 
 #define array_count(array) (sizeof(array) / (sizeof((array)[0])))
 
+#define BSE_STACK_BUFFER_TINY 2048
 #define BSE_STACK_BUFFER_SMALL 4096
 #define BSE_STACK_BUFFER_MEDIUM 8192
 #define BSE_STACK_BUFFER_LARGE 16384
+#define BSE_STACK_BUFFER_HUGE 32768
+#define BSE_STACK_BUFFER_GARGANTUAN 65536
 
 #define BSE_STRINGIZE(s) _BSE_STRINGIZE_HELPER(s)
 #define _BSE_STRINGIZE_HELPER(s) #s
