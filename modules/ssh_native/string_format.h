@@ -51,7 +51,7 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
 #define BSE_STACK_BUFFER_LARGE 16384
 #define BSE_STACK_BUFFER_HUGE 32768
 #define BSE_STACK_BUFFER_GARGANTUAN 65536
-#define BSE_STACK_BUFFER_GARGANTUAN_PLUS 131072
+#define BSE_STACK_BUFFER_GARGANTUAN_PLUS 212992
 
 #define BSE_STRINGIZE(s) _BSE_STRINGIZE_HELPER(s)
 #define _BSE_STRINGIZE_HELPER(s) #s
@@ -106,6 +106,7 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
   //returns the character after reading the expected value
   char const* string_parse_value( char const* floatString, float* out_float );
   char const* string_parse_value( char const* intString, s32* out_int );
+  char const* string_parse_value( char const* intString, s64* out_int );
 
   //returns the number of bytes written including the \0
   template<typename... Args> INLINE s32 string_format( char* destination, s32 capacity, Args... args );
@@ -754,6 +755,30 @@ INLINE bool flags_contain(enumtypename a, enumtypename b) { return (basictype(a)
     return reader;
   }
 
+  char const* string_parse_value( char const* intString, s64* out_int )
+  {
+    s64 result = 0;
+    s64 sign = 1;
+    char const* reader = intString;
+    while ( *reader == ' ' ) { ++reader; }
+    while ( *reader != ' ' && *reader != '\0' )
+    {
+      if ( *reader == '-' )
+      {
+        sign = -1;
+      }
+      else if ( *reader >= '0' && *reader <= '9' )
+      {
+        result *= 10;
+        result += s64( *reader - '0' );
+      }
+
+      ++reader;
+    }
+
+    *out_int = result * sign;
+    return reader;
+  }
 
 
 #ifdef BSE_OVERWRITE_MIN

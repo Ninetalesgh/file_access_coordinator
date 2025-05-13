@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
+#include "string_format.h"
 struct String {
   String(){}
   String(char const* s) { str = s;}
@@ -85,7 +86,7 @@ public:
   bool is_current_base_config_valid();
   void show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)());
 
-  int request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
+  int request_exec(ssh_session session, char const* request, char* buffer, int bufferSize, bool outputToStandardOut = true);
   int request_exec(char const* request);
 
   template<typename... Args> int request_exec_format(Args... args)
@@ -107,7 +108,7 @@ public:
   int upload_file(const char* localPath, char const* remotePath);
 
   int download_file(char const* localPath, char const* remotePath);
-  
+
   int reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp);
 
   int release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions = false);

@@ -1,5 +1,9 @@
+#include "access_coordinator.h"
 #include "debug.h"
 #include "string_format.h"
+
+#include <iostream>
+#include <chrono>
 
 #ifndef S_IRUSR
 #define	S_IRUSR	0400
@@ -215,9 +219,9 @@ void AccessCoordinator::show_confirmation_dialog(String title, String message, v
 
 constexpr INLINE float as_megabytes( s64 bytes ) { return float(bytes)/(1024.0f * 1024.0f); }
 
-int AccessCoordinator::request_exec(char const* request, char* buffer, int bufferSize, bool outputToStandardOut)
+int AccessCoordinator::request_exec(ssh_session session, char const* request, char* buffer, int bufferSize, bool outputToStandardOut)
 {
-  ssh_channel channel = ssh_channel_new(mSession);
+  ssh_channel channel = ssh_channel_new(session);
 
   if (channel == NULL)
   {
@@ -275,7 +279,7 @@ int AccessCoordinator::request_exec(char const* request)
 {
   char buffer[256];
   buffer[0] = '\0';
-  return request_exec(request, buffer, sizeof(buffer));
+  return request_exec(mSession, request, buffer, sizeof(buffer));
 }
 
 int AccessCoordinator::log_section_exit_return_error()
@@ -322,8 +326,21 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     return log_section_exit_return_error();
   }
 
-  char buffer[BSE_STACK_BUFFER_HUGE];
+  fseek(localFile, 0, SEEK_END);
+  s64 localFileSize = ftell(localFile);
+  fseek(localFile, 0, SEEK_SET);
+
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  char buffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   int bytesRead;
+
+  using clock = std::chrono::steady_clock;
+  auto nextClock = clock::now() + std::chrono::seconds(1);
+
+  int bytesSinceLastSecond = 0;
   while ((bytesRead = (int)fread(buffer,1, sizeof(buffer), localFile)) > 0)
   {
     if (sftp_write(remoteFile, buffer, bytesRead) != bytesRead)
@@ -331,26 +348,32 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
       log_error("- Error while writing remote file: ", ssh_get_error(mSession));
       break;
     }
+
+    bytesSinceLastSecond += bytesRead;
+    auto now = clock::now();
+    if (now >= nextClock)
+    {
+      nextClock += std::chrono::seconds(1);
+      string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", mFullRemotePath.utf8().get_data(), "')\"");
+      request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+      s64 remoteFileBytes = 0;
+      string_parse_value(responseBuffer, &remoteFileBytes);
+      std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+      bytesSinceLastSecond = 0;   
+    }
   }
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
-  char responseBuffer[BSE_STACK_BUFFER_SMALL];
-  responseBuffer[0] = '\0';
-
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   
-  int remoteFileSize;
+  s64 remoteFileSize;
   string_parse_value(responseBuffer, &remoteFileSize);
-
-  fseek(localFile, 0, SEEK_END);
-  s64 localFileSize = ftell(localFile);
 
   int result;
   if (s64(remoteFileSize) == localFileSize)
   {
     log_info("- Success!");
-    log_info("- Uploaded size: ", as_megabytes(localFileSize), " MB");
+    log_info("- Uploaded: ", as_megabytes(localFileSize), " MB");
     result = SSH_OK;
   }
   else
@@ -405,14 +428,39 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     return log_section_exit_return_error();
   }
 
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  
+  s64 remoteFileSize;
+  string_parse_value(responseBuffer, &remoteFileSize);
+
   char buffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   int bytesRead;
+
+  using clock = std::chrono::steady_clock;
+  auto nextClock = clock::now() + std::chrono::seconds(1);
+  s64 bytesSinceLastSecond = 0;
+  s64 totalBytesRead = 0;
   while ((bytesRead = (int)sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
   {
     if (fwrite(buffer, 1, bytesRead, localFile) != (size_t)bytesRead)
     {
       log_error("- Error writing local file: ", localPath);
       break;
+    }
+
+    auto now = clock::now();
+    bytesSinceLastSecond += bytesRead;
+    totalBytesRead += bytesRead;
+    if (now >= nextClock)
+    {
+      nextClock += std::chrono::seconds(1);
+      std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+      bytesSinceLastSecond = 0;
     }
   }
 
@@ -421,23 +469,13 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     log_error("- Error while reading remote file: ", ssh_get_error(mSession));
   }
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
-  char responseBuffer[BSE_STACK_BUFFER_SMALL];
-  responseBuffer[0] = '\0';
-
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
-  
-  int remoteFileSize;
-  string_parse_value(responseBuffer, &remoteFileSize);
-
   fseek(localFile, 0, SEEK_END);
   s64 localFileSize = ftell(localFile);
 
   if (s64(remoteFileSize) == localFileSize)
   {
     log_info("- Success!");
-    log_info("- Downloaded size: ", as_megabytes(localFileSize), " MB");
+    log_info("- Downloaded: ", as_megabytes(localFileSize), " MB");
   }
   else
   {
@@ -492,7 +530,7 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
   responseBuffer[0] = '\0';
   
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo $SSH_CONNECTION | awk '{print $1}'");
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   string_copy(mIpAddress, responseBuffer, sizeof(mIpAddress));
   string_replace_char(mIpAddress,'\n','\0');
 
@@ -521,7 +559,7 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
 
   log_info("\n==============================================");
   log_info("--- Reserving File ---------------------------");
-  log_info("- Attempting to reserve '", filename, "' for user '", user, "' with ip '", myIp, "'");
+  log_info("- Attempting to reserve '", remoteBaseDir, "/", filename, "' for user '", user, "' with ip '", myIp, "'");
 
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
@@ -533,13 +571,13 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
                " && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
                 "then echo \"", user, " ", myIp ,"\" > '_", filename,"reservation'; fi");
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
                "' && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
                "then chmod -w '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
   responseBuffer[0] = '\0';
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
 
   log_info("==============================================\n");
@@ -575,14 +613,14 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   }
   else
   {
-    log_info("- Attempting to release '", filename, "' from user '", user, "' with ip '", myIp, "'");
+    log_info("- Attempting to release '", remoteBaseDir, "/", filename, "' from user '", user, "' with ip '", myIp, "'");
     string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
                "' && if grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
                "then chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
   }
 
-  request_exec(stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
 
   log_info("==============================================\n");
