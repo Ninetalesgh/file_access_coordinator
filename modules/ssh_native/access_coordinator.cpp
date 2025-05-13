@@ -362,6 +362,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
       bytesSinceLastSecond = 0;   
     }
   }
+  std::cout << "\r\n";
 
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
@@ -463,6 +464,8 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
       bytesSinceLastSecond = 0;
     }
   }
+  
+  std::cout << "\r\n";
 
   if (bytesRead < 0)
   {
