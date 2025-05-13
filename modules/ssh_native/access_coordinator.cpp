@@ -333,7 +333,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     }
   }
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_GARGANTUAN];
+  char stringFormatBuffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
 
@@ -405,7 +405,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     return log_section_exit_return_error();
   }
 
-  char buffer[BSE_STACK_BUFFER_GARGANTUAN];
+  char buffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   int bytesRead;
   while ((bytesRead = (int)sftp_read(remoteFile, buffer, sizeof(buffer))) > 0)
   {
