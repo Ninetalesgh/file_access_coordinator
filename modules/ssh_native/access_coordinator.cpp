@@ -363,9 +363,10 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   using clock = std::chrono::steady_clock;
   auto nextLogClock = clock::now() + std::chrono::seconds(1);
 #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
-  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(30);
+  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(100);
 #endif
 
+  int bytesWrittenTotal = 0;
   int bytesSinceLastSecond = 0;
   while ((bytesRead = (int)fread(buffer,1, sizeof(buffer), localFile)) > 0)
   {
@@ -375,30 +376,28 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
       break;
     }
 
+    bytesWrittenTotal += bytesRead;
     bytesSinceLastSecond += bytesRead;
+
     auto now = clock::now();
     if (now >= nextLogClock)
     {
-      nextLogClock += std::chrono::seconds(1);
-      string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", mFullRemotePath.utf8().get_data(), "')\"");
-      request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
-      s64 remoteFileBytes = 0;
-      string_parse_value(responseBuffer, &remoteFileBytes);
+      //string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", mFullRemotePath.utf8().get_data(), "')\"");
+      //request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+      //s64 remoteFileBytes = 0;
+      //string_parse_value(responseBuffer, &remoteFileBytes);
+      s64 remoteFileBytes = bytesWrittenTotal;
 #if defined(FAC_WINGUI)
       log_info("\rProgress: ", remoteFileBytes, "/", localFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
       std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
 #endif
-      bytesSinceLastSecond = 0;   
-    }
-#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
-    now = clock::now();
-    if (now >= nextWindowPollClock)
-    {
-      nextWindowPollClock += std::chrono::milliseconds(30);
+      bytesSinceLastSecond = 0;  
+      #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
       mWindowMessageCallback(true);
+      #endif
+      nextLogClock = now + std::chrono::seconds(1);
     }
-#endif
   }
 #if defined(FAC_WINGUI)
   log_info("\rProgress: Done! ");
@@ -406,7 +405,8 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   std::cout << "\r\n";
 #endif
 
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\" "
+        "&& if [ \"$(stat -c%s '", remotePath, "')\" -eq ", localFileSize, " ]; then cp -f '",remotePath,"' '", remotePath, "_BACKUP'; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   
   s64 remoteFileSize;
@@ -461,6 +461,14 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     return log_section_exit_return_error();
   }
   
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "if [ \"$(stat -c%s '", remotePath, "')\" -lt \"$(stat -c%s '", remotePath, "_BACKUP')\" ]; "
+                                  "then cp -f '", remotePath, "_BACKUP' '", remotePath, "'; fi");
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+
   sftp_file remoteFile = sftp_open(sftp, remotePath, O_RDONLY, 0);
   if (remoteFile == NULL)
   {
@@ -470,16 +478,9 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   }
 
   #if defined(_WIN32)
-  if (SetFileAttributes(localPath, FILE_ATTRIBUTE_NORMAL) == 0)
-  {
-    log_error("- Error setting local file writable.");
-    return log_section_exit_return_error();
-  }
+  //Don't care if file doesn't exist
+  SetFileAttributes(localPath, FILE_ATTRIBUTE_NORMAL);
   #endif
-
-  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
-  char responseBuffer[BSE_STACK_BUFFER_SMALL];
-  responseBuffer[0] = '\0';
 
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
@@ -508,7 +509,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   using clock = std::chrono::steady_clock;
   auto nextLogClock = clock::now() + std::chrono::seconds(1);
 #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
-  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(30);
+  auto nextWindowPollClock = clock::now() + std::chrono::milliseconds(100);
 #endif
   s64 bytesSinceLastSecond = 0;
   s64 totalBytesRead = 0;
@@ -525,23 +526,17 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     totalBytesRead += bytesRead;
     if (now >= nextLogClock)
     {
-      nextLogClock += std::chrono::seconds(1);
 #if defined(FAC_WINGUI)
       log_info("\rProgress: ", totalBytesRead, "/", remoteFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
   std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
 #endif
-
+      #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
+      mWindowMessageCallback(true);
+      #endif
+      nextLogClock = now + std::chrono::seconds(1);
       bytesSinceLastSecond = 0;
     }
-#if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
-    now = clock::now();
-    if (now >= nextWindowPollClock)
-    {
-      nextWindowPollClock += std::chrono::milliseconds(30);
-      mWindowMessageCallback(true);
-    }
-#endif
   }
 #if defined(FAC_WINGUI)
   log_info("\rProgress: Done! ");

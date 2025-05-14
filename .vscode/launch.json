@@ -8,7 +8,7 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-           "program": "w:/file_access_coordinator/export/fac.exe",
+           "program": "w:/file_access_coordinator/export/fac_debug.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "w:/file_access_coordinator/export",

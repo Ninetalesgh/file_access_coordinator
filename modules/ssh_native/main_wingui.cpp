@@ -1,8 +1,7 @@
 #define NO_GODOT
 #define FAC_WINGUI
-#define FAC_SIMPLE_GUI
 
-//#define POLL_WINDOWS_IN_SFTP_THREAD
+#define POLL_WINDOWS_IN_SFTP_THREAD
 
 #include "access_coordinator.cpp"
 
@@ -407,7 +406,7 @@ char const* get_button_text(int buttonId)
 #define UI_PADDING 2
 
 #if defined(FAC_SIMPLE_GUI)
-#define COLUMN_0_WIDTH 200
+#define COLUMN_0_WIDTH 250
 #define ROW_0_HEIGHT 30
 #else
 #define COLUMN_0_WIDTH 100 
@@ -536,6 +535,8 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 
 void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
 {
+  hTextBoxBrush = CreateSolidBrush(textBkColor);
+  hButtonBrush = CreateSolidBrush(buttonBkColor);
   if (gSimpleGui)
   {
     hButtonUpload = CreateWindow(
@@ -552,7 +553,7 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
       "STATIC",
       "",
       WS_VISIBLE | WS_CHILD,            
-      COLUMN_0_OFFSET, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_0_WIDTH, ROW_1_HEIGHT,
+      COLUMN_0_OFFSET + UI_PADDING, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_0_WIDTH, ROW_1_HEIGHT,
       hwnd,
       (HMENU)HwndId::Label_ReserveState,
       (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
@@ -566,9 +567,6 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
     SetWindowTheme(hButtonForceRelease, L"", L"");
     SetWindowTheme(hButtonSaveConfig, L"", L"");
     SetWindowTheme(hButtonOpenFile, L"", L"");
-
-    hTextBoxBrush = CreateSolidBrush(textBkColor);
-    hButtonBrush = CreateSolidBrush(buttonBkColor);
 
     // BUTTONS
     hButtonUpload = CreateWindow(
@@ -683,13 +681,43 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 {
                     case (int)HwndId::Button_Upload:
                     {
+                      if (gSimpleGui)
+                      {
+                        if (reserveState == ReserveState::UNKNOWN || reserveState == ReserveState::RESERVED_BY_ME)
+                        {
+                          gCoordinator.upload();                          
+                        }
+                        else
+                        {
+                          //don't upload if it's not our file in simple mode, since there's no confirmation dialog
+                        }
+                      }
+                      else
+                      {
                         gCoordinator.upload();
+                      }
                         break;
                     }
                     case (int)HwndId::Button_Download:
                     {
+                      if (gSimpleGui && reserveState == ReserveState::RESERVED_BY_ME)
+                      {
+                        int confirmOverwrite = MessageBoxW(
+                          hMainWindow,
+                          L"Datenbank ist zurzeit schon in bearbeitung.\nLokale Version ersetzen?",
+                          L"Datenbank sicher ersetzen?",
+                          MB_YESNO | MB_ICONQUESTION | MB_TOPMOST);
+                        if (confirmOverwrite == IDYES)
+                        {
+                          gCoordinator.download();
+                        }
+                      }
+                      else
+                      {
                         gCoordinator.download();
-                        break;
+                      }
+                      
+                      break;
                     }
                     case (int)HwndId::Button_Reserve:
                     {
@@ -767,7 +795,7 @@ void fetch_new_log_callback()
       bool overwriteLastLine = log[0] == '\r' && log[1] != '\n';
       if (overwriteLastLine)
       {
-        SetWindowText(hReserveStateLabel, log);
+        SetWindowText(hReserveStateLabel, log + 1);
       }
     }
     else
