@@ -340,8 +340,13 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
     sftp_free(sftp);
     return log_section_exit_return_error();
   }
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+  //Upload to _PART instead of the file directly and overwrite the actual file afterwards
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), remotePath, "_PART");
 
-  sftp_file remoteFile = sftp_open(sftp, remotePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+  sftp_file remoteFile = sftp_open(sftp, stringFormatBuffer, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
   if (remoteFile == NULL)
   {
     log_error("- Error opening remote file: ", ssh_get_error(mSession));
@@ -353,9 +358,6 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   s64 localFileSize = ftell(localFile);
   fseek(localFile, 0, SEEK_SET);
 
-  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
-  char responseBuffer[BSE_STACK_BUFFER_SMALL];
-  responseBuffer[0] = '\0';
 
   char buffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   int bytesRead;
@@ -406,7 +408,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
 #endif
 
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\" "
-        "&& if [ \"$(stat -c%s '", remotePath, "')\" -eq ", localFileSize, " ]; then cp -f '",remotePath,"' '", remotePath, "_BACKUP'; fi");
+        "&& if [ \"$(stat -c%s '", remotePath, "_PART')\" -eq ", localFileSize, " ]; then mv -f '",remotePath,"_PART' '", remotePath, "'; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   
   s64 remoteFileSize;
@@ -465,9 +467,9 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
 
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "if [ \"$(stat -c%s '", remotePath, "')\" -lt \"$(stat -c%s '", remotePath, "_BACKUP')\" ]; "
-                                  "then cp -f '", remotePath, "_BACKUP' '", remotePath, "'; fi");
-  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+//  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "if [ \"$(stat -c%s '", remotePath, "')\" -lt \"$(stat -c%s '", remotePath, "_BACKUP')\" ]; "
+//                                  "then cp -f '", remotePath, "_BACKUP' '", remotePath, "'; fi");
+//  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
 
   sftp_file remoteFile = sftp_open(sftp, remotePath, O_RDONLY, 0);
   if (remoteFile == NULL)
