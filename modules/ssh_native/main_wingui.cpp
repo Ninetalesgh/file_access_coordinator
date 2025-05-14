@@ -1,5 +1,7 @@
 #define NO_GODOT
 #define FAC_WINGUI
+#define FAC_SIMPLE_GUI
+
 //#define POLL_WINDOWS_IN_SFTP_THREAD
 
 #include "access_coordinator.cpp"
@@ -14,16 +16,27 @@
 #include <iomanip>
 #include <chrono>
 #include <ctime>
+#include <tlhelp32.h>
+#include <tchar.h>
+#include <psapi.h>
+
 
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "shell32.lib")
 
 
 //I made this part c++17, it was easier to get going right away
 AccessCoordinator gCoordinator;
 bool gRunning = true;
+bool gOnlyCommandLine = false;
+#if defined(FAC_SIMPLE_GUI)
+bool gSimpleGui = true;
+#else
+bool gSimpleGui = false;
+#endif
 
 #undef log_info
 #undef log_warning
@@ -34,6 +47,46 @@ bool gRunning = true;
 
 
 namespace fs = std::filesystem;
+
+DWORD GetParentProcessId(DWORD pid) {
+    DWORD ppid = (DWORD)-1;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32 entry = { 0 };
+        entry.dwSize = sizeof(entry);
+        if (Process32First(snapshot, &entry)) {
+            do {
+                if (entry.th32ProcessID == pid) {
+                    ppid = entry.th32ParentProcessID;
+                    break;
+                }
+            } while (Process32Next(snapshot, &entry));
+        }
+        CloseHandle(snapshot);
+    }
+    return ppid;
+}
+
+String GetProcessName(DWORD pid) {
+    String name = "<unknown>";
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (hProcess) {
+        char buffer[MAX_PATH];
+        if (GetModuleBaseName(hProcess, NULL, buffer, MAX_PATH)) {
+            name = buffer;
+        }
+        CloseHandle(hProcess);
+    }
+    return name;
+}
+
+bool is_launched_from_cmd()
+{
+  DWORD myPid = GetCurrentProcessId();
+  DWORD parentPid = GetParentProcessId(myPid);
+  String parentName = GetProcessName(parentPid);
+  return parentName == "cmd.exe";
+}
 
 bool ensure_path_exists(fs::path const& path)
 {
@@ -299,7 +352,6 @@ bool open_file_dialog(HWND hwndOwner, char* buffer, s64 bufferSize) {
     ofn.nMaxFileTitle = 0;
     ofn.lpstrInitialDir = NULL;
     ofn.lpstrTitle = "Select a File";
-    //ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT;
 
     return GetOpenFileName(&ofn);
 }
@@ -354,12 +406,17 @@ char const* get_button_text(int buttonId)
 
 #define UI_PADDING 2
 
+#if defined(FAC_SIMPLE_GUI)
+#define COLUMN_0_WIDTH 200
+#define ROW_0_HEIGHT 30
+#else
 #define COLUMN_0_WIDTH 100 
+#define ROW_0_HEIGHT 20
+#endif
 #define COLUMN_1_WIDTH 40
 #define COLUMN_2_WIDTH 420
 #define COLUMN_3_WIDTH 100
 
-#define ROW_0_HEIGHT 20
 #define ROW_1_HEIGHT 20
 #define ROW_2_HEIGHT 500
 #define ROW_3_HEIGHT 20
@@ -372,7 +429,6 @@ char const* get_button_text(int buttonId)
 #define COLUMN_3_OFFSET COLUMN_2_WIDTH + COLUMN_2_OFFSET + UI_PADDING
 #define COLUMN_4_OFFSET COLUMN_3_WIDTH + COLUMN_3_OFFSET + UI_PADDING
 
-
 #define ROW_0_OFFSET UI_PADDING
 #define ROW_1_OFFSET ROW_0_HEIGHT + ROW_0_OFFSET + UI_PADDING
 #define ROW_2_OFFSET ROW_1_HEIGHT + ROW_1_OFFSET + UI_PADDING
@@ -381,8 +437,13 @@ char const* get_button_text(int buttonId)
 #define ROW_5_OFFSET ROW_4_HEIGHT + ROW_4_OFFSET + UI_PADDING
 #define ROW_6_OFFSET ROW_5_HEIGHT + ROW_5_OFFSET + UI_PADDING
 
+#if defined(FAC_SIMPLE_GUI)
+#define WINDOW_WIDTH  COLUMN_0_WIDTH * 2 + UI_PADDING
+#define WINDOW_HEIGHT ROW_1_OFFSET
+#else
 #define WINDOW_WIDTH  COLUMN_4_OFFSET
 #define WINDOW_HEIGHT ROW_3_OFFSET
+#endif
 
 #define BUTTON_STYLE BS_PUSHBUTTON
 // #define BUTTON_STYLE BS_OWNERDRAW
@@ -415,11 +476,13 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         return 0;
     case WM_PAINT: 
     {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-        SetTextColor(hdc, textForegroundColor);
-        SetBkColor(hdc, windowBkColor);
-
+      PAINTSTRUCT ps;
+      HDC hdc = BeginPaint(hwnd, &ps);
+      SetTextColor(hdc, textForegroundColor);
+      SetBkColor(hdc, windowBkColor);
+      if (!gSimpleGui)
+      {
+        
         char const* lblUser = "User: ";
         char const* lblFile = "File: ";
         RECT rectRow0 = { COLUMN_1_OFFSET, ROW_0_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_0_OFFSET + ROW_0_HEIGHT };
@@ -427,9 +490,10 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         
         DrawText(hdc, lblUser, -1, &rectRow0, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
         DrawText(hdc, lblFile, -1, &rectRow1, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
-    
-        EndPaint(hwnd, &ps);
-        return 0;
+        
+      }
+      EndPaint(hwnd, &ps);
+      return 0;
     }
     case WM_DRAWITEM:
     {
@@ -470,6 +534,126 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
+{
+  if (gSimpleGui)
+  {
+    hButtonUpload = CreateWindow(
+      "BUTTON", "Bearbeiten Starten",
+      WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+      COLUMN_0_OFFSET, ROW_0_OFFSET, COLUMN_0_WIDTH, ROW_0_HEIGHT,
+      hwnd, (HMENU)HwndId::Button_Download, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+    hButtonDownload = CreateWindow(
+        "BUTTON", "Bearbeiten Beenden",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_1_OFFSET, ROW_0_OFFSET, COLUMN_0_WIDTH, ROW_0_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_Upload, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+    hReserveStateLabel = CreateWindow(
+      "STATIC",
+      "",
+      WS_VISIBLE | WS_CHILD,            
+      COLUMN_0_OFFSET, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_0_WIDTH, ROW_1_HEIGHT,
+      hwnd,
+      (HMENU)HwndId::Label_ReserveState,
+      (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
+  }
+  else
+  {
+    SetWindowTheme(hButtonUpload, L"", L"");
+    SetWindowTheme(hButtonDownload, L"", L"");
+    SetWindowTheme(hButtonReserve, L"", L"");
+    SetWindowTheme(hButtonRelease, L"", L"");
+    SetWindowTheme(hButtonForceRelease, L"", L"");
+    SetWindowTheme(hButtonSaveConfig, L"", L"");
+    SetWindowTheme(hButtonOpenFile, L"", L"");
+
+    hTextBoxBrush = CreateSolidBrush(textBkColor);
+    hButtonBrush = CreateSolidBrush(buttonBkColor);
+
+    // BUTTONS
+    hButtonUpload = CreateWindow(
+        "BUTTON", "Upload",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_0_OFFSET, ROW_0_OFFSET, COLUMN_0_WIDTH, ROW_0_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_Upload, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hButtonDownload = CreateWindow(
+        "BUTTON", "Download",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_0_OFFSET, ROW_1_OFFSET, COLUMN_0_WIDTH, ROW_1_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_Download, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hButtonReserve = CreateWindow(
+        "BUTTON", "Reserve",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_Reserve, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hButtonRelease = CreateWindow(
+        "BUTTON", "Release",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_3_OFFSET - COLUMN_1_OFFSET - 3 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_Release, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hButtonForceRelease = CreateWindow(
+        "BUTTON", "Force Release",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_3_OFFSET, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_ForceRelease, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    // hButtonSaveConfig = CreateWindow(
+    //     "BUTTON", "Save Config",
+    //     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+    //     COLUMN_0_OFFSET, ROW_5_OFFSET, COLUMN_0_WIDTH, ROW_5_HEIGHT,
+    //     hwnd, (HMENU)HwndId::Button_SaveConfig, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    // );
+    hButtonOpenFile = CreateWindow(
+        "BUTTON", "Browse Files",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
+        COLUMN_3_OFFSET, ROW_1_OFFSET, COLUMN_3_WIDTH, ROW_1_HEIGHT,
+        hwnd, (HMENU)HwndId::Button_OpenFile, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    
+    //TEXT FIELDS
+    hUserTextbox = CreateWindowEx(
+        0, "EDIT", gCoordinator.mUser.get_data(), 
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
+        COLUMN_2_OFFSET, ROW_0_OFFSET, COLUMN_2_WIDTH, ROW_0_HEIGHT,  // x, y, width, height
+        hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hFileTextbox = CreateWindowEx(
+        0, "EDIT", gCoordinator.mFullLocalPath.get_data(), 
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL,
+        COLUMN_2_OFFSET, ROW_1_OFFSET, COLUMN_2_WIDTH, ROW_1_HEIGHT,  // x, y, width, height
+        hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
+    );
+    hOutputTextbox = CreateWindowEx(
+        0, "EDIT", "",
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY,
+        COLUMN_0_OFFSET, ROW_2_OFFSET, WINDOW_WIDTH, ROW_2_HEIGHT,
+        hwnd, (HMENU)HwndId::Text_Output, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+    
+    //FONT
+    hOutputFont = CreateFont(
+        -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+        FIXED_PITCH | FF_DONTCARE, "Consolas");
+    SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
+
+    //LABEL
+    hReserveStateLabel = CreateWindow(
+    "STATIC",
+    "",
+    WS_VISIBLE | WS_CHILD,            
+    COLUMN_0_OFFSET, ROW_3_OFFSET,
+    COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_HEIGHT,
+    hwnd,
+    (HMENU)HwndId::Label_ReserveState,
+    (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
+  }
+}
+
 bool gOnlyProcEssentials = false;
 LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     char buffer[BSE_STACK_BUFFER_SMALL];
@@ -481,97 +665,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg) {
         case WM_CREATE:
         {
-            SetWindowTheme(hButtonUpload, L"", L"");
-            SetWindowTheme(hButtonDownload, L"", L"");
-            SetWindowTheme(hButtonReserve, L"", L"");
-            SetWindowTheme(hButtonRelease, L"", L"");
-            SetWindowTheme(hButtonForceRelease, L"", L"");
-            SetWindowTheme(hButtonSaveConfig, L"", L"");
-
-            hTextBoxBrush = CreateSolidBrush(textBkColor);
-            hButtonBrush = CreateSolidBrush(buttonBkColor);
-
-            // BUTTONS
-            hButtonUpload = CreateWindow(
-                "BUTTON", "Upload",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_0_OFFSET, ROW_0_OFFSET, COLUMN_0_WIDTH, ROW_0_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_Upload, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hButtonDownload = CreateWindow(
-                "BUTTON", "Download",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_0_OFFSET, ROW_1_OFFSET, COLUMN_0_WIDTH, ROW_1_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_Download, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hButtonReserve = CreateWindow(
-                "BUTTON", "Reserve",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_Reserve, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hButtonRelease = CreateWindow(
-                "BUTTON", "Release",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_3_OFFSET - COLUMN_1_OFFSET - 3 * UI_PADDING, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_Release, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hButtonForceRelease = CreateWindow(
-                "BUTTON", "Force Release",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_3_OFFSET, ROW_3_OFFSET, COLUMN_0_WIDTH, ROW_3_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_ForceRelease, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            // hButtonSaveConfig = CreateWindow(
-            //     "BUTTON", "Save Config",
-            //     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-            //     COLUMN_0_OFFSET, ROW_5_OFFSET, COLUMN_0_WIDTH, ROW_5_HEIGHT,
-            //     hwnd, (HMENU)HwndId::Button_SaveConfig, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            // );
-            hButtonOpenFile = CreateWindow(
-                "BUTTON", "Browse Files",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BUTTON_STYLE,
-                COLUMN_3_OFFSET, ROW_1_OFFSET, COLUMN_3_WIDTH, ROW_1_HEIGHT,
-                hwnd, (HMENU)HwndId::Button_OpenFile, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            
-            //TEXT FIELDS
-            hUserTextbox = CreateWindowEx(
-                0, "EDIT", gCoordinator.mUser.get_data(), 
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
-                COLUMN_2_OFFSET, ROW_0_OFFSET, COLUMN_2_WIDTH, ROW_0_HEIGHT,  // x, y, width, height
-                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hFileTextbox = CreateWindowEx(
-                0, "EDIT", gCoordinator.mFullLocalPath.get_data(), 
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL,
-                COLUMN_2_OFFSET, ROW_1_OFFSET, COLUMN_2_WIDTH, ROW_1_HEIGHT,  // x, y, width, height
-                hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
-            );
-            hOutputTextbox = CreateWindowEx(
-                0, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY,
-                COLUMN_0_OFFSET, ROW_2_OFFSET, WINDOW_WIDTH, ROW_2_HEIGHT,
-                hwnd, (HMENU)HwndId::Text_Output, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-            
-            //FONT
-            hOutputFont = CreateFont(
-                -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-                0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                FIXED_PITCH | FF_DONTCARE, "Consolas");
-            SendMessage(hOutputTextbox, WM_SETFONT, (WPARAM)hOutputFont, TRUE);
-
-            //LABEL
-            hReserveStateLabel = CreateWindow(
-            "STATIC",
-            "",
-            WS_VISIBLE | WS_CHILD,            
-            COLUMN_0_OFFSET, ROW_3_OFFSET,
-            COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_HEIGHT,
-            hwnd,
-            (HMENU)HwndId::Label_ReserveState,
-            (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
+            create_gui(hwnd, wParam, lParam);
             return 0;
         }
 
@@ -660,47 +754,152 @@ s32 lastNewlineIndex = 0;
 
 void fetch_new_log_callback()
 {
-    char const* log = gCoordinator.fetch_output().get_data();
-    if (*log)
+  if(gOnlyCommandLine)
+  {
+    return;
+  }
+
+  char const* log = gCoordinator.fetch_output().get_data();
+  if (log && *log)
+  {
+    if (gSimpleGui)
     {
-        int len = GetWindowTextLength(hOutputTextbox);
-        int start = len;
-        bool overwriteLastLine = log[0] == '\r' && log[1] != '\n';
-        char const* last = string_find_last(log, '\n');
-        if (last)
-        {
-            lastNewlineIndex = len + int(last - log);
-        }
-        
-        if (overwriteLastLine)
-        {
-            start = lastNewlineIndex + 1;
-        }
-        
-        SendMessage(hOutputTextbox, EM_SETSEL, start, len);
-        SendMessage(hOutputTextbox, EM_REPLACESEL, FALSE, (LPARAM)log);
+      bool overwriteLastLine = log[0] == '\r' && log[1] != '\n';
+      if (overwriteLastLine)
+      {
+        SetWindowText(hReserveStateLabel, log);
+      }
     }
+    else
+    {
+      int len = GetWindowTextLength(hOutputTextbox);
+      int start = len;
+      bool overwriteLastLine = log[0] == '\r' && log[1] != '\n';
+      char const* last = string_find_last(log, '\n');
+      if (last)
+      {
+        lastNewlineIndex = len + int(last - log);
+      }
+      
+      if (overwriteLastLine)
+      {
+        start = lastNewlineIndex + 1;
+      }
+      
+      SendMessage(hOutputTextbox, EM_SETSEL, start, len);
+      SendMessage(hOutputTextbox, EM_REPLACESEL, FALSE, (LPARAM)log);
+    }
+  }
 }
 
 bool confirm_dialog_callback(char const* title, char const* message)
 {
-    int result = MessageBox(
+  if (gOnlyCommandLine)
+  {
+    std::string input;
+    std::cout << message;
+    std::cout << " (y/n): ";
+    std::getline(std::cin, input);
+    return input == "y" || input == "Y";
+  }
+  else
+  {
+    if (gSimpleGui)
+    {
+      return true;
+    }
+    else
+    {
+      int result = MessageBox(
         hMainWindow,
         message,
         title,
         MB_YESNO | MB_ICONQUESTION | MB_TOPMOST);
-    return result == IDYES;
+      return result == IDYES;
+    }
+  }
+}
+
+int loop_wait_for_expression()
+{
+  while(gRunning)
+  {
+    std::string input;
+    std::cout << "----------------------------------------------\nCommand: ";
+    std::getline(std::cin, input);
+    if (!evaluate_expression(input.c_str())) gRunning = false;
+  }
+
+  return 0;
+}
+
+int main_console(LPSTR commandLine)
+{
+  int argc;
+  LPWSTR* argvW = CommandLineToArgvW(GetCommandLineW(), &argc);
+  if (argvW != NULL)
+  {
+    char* argv[128];
+    char buffer[BSE_STACK_BUFFER_MEDIUM];
+    int bytesWritten = 0;
+    for (int i = 0; i < argc; ++i) 
+    {
+      argv[i] = buffer + bytesWritten;
+      bytesWritten += WideCharToMultiByte(CP_ACP, 0, argvW[i], -1, buffer + bytesWritten, sizeof(buffer) - bytesWritten, NULL, NULL);
+    }
+
+    LocalFree(argvW);
+    
+    for (int i = 1; i < argc; ++i)
+    {
+      if (!evaluate_expression(argv[i])) gRunning = false;
+    }
+
+    loop_wait_for_expression();
+    return 0;
+  }
+
+  return 1;
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdShow) 
 {
-    const char CLASS_NAME[] = "File Access Coordinator";
-    AllocConsole();
-    freopen("CONOUT$", "w", stdout);  // Redirect stdout
-    freopen("CONIN$", "r", stdin);    // Redirect stdin
-    freopen("CONOUT$", "w", stderr);  // Redirect stderr
+  gCoordinator.mConfirmationDialogCallback = &confirm_dialog_callback;
 
-    gCoordinator.mConfirmationDialogCallback = &confirm_dialog_callback;
+  std::string filepath;
+  std::string user;
+  std::string sshHostname;
+  std::string sshUsername;
+  std::string sshPassword;
+  std::string remoteBaseDir;
+  bool needToLoadDefault = !load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
+  gOnlyCommandLine = is_launched_from_cmd();
+#if defined(FAC_DEBUG)
+  if (AllocConsole()) {
+      FILE* fp;
+      freopen_s(&fp, "CONOUT$", "w", stdout);
+      freopen_s(&fp, "CONOUT$", "w", stderr);
+      freopen_s(&fp, "CONIN$", "r", stdin);
+
+      std::ios::sync_with_stdio(true);
+  }
+#endif
+
+  if (gOnlyCommandLine)
+  {
+    if (AllocConsole()) {
+      FILE* fp;
+      freopen_s(&fp, "CONOUT$", "w", stdout);
+      freopen_s(&fp, "CONOUT$", "w", stderr);
+      freopen_s(&fp, "CONIN$", "r", stdin);
+
+      std::ios::sync_with_stdio(true);
+    }
+  }
+  else
+  {
+    const char CLASS_NAME[] = "File Access Coordinator";
+
     gCoordinator.mNewLogSignal = &fetch_new_log_callback;
     gCoordinator.mWindowMessageCallback = &poll_win_message;
     hWindowBrush = CreateSolidBrush(windowBkColor);
@@ -713,14 +912,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
 
     RegisterClass(&wc);
-
-    std::string filepath;
-    std::string user;
-    std::string sshHostname;
-    std::string sshUsername;
-    std::string sshPassword;
-    std::string remoteBaseDir;
-    bool needToLoadDefault = !load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
 
     RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
     AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, true, WS_EX_OVERLAPPEDWINDOW);
@@ -746,17 +937,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
 
     ShowWindow(hMainWindow, nCmdShow);
     UpdateWindow(hMainWindow);
+  }
 
-    if (needToLoadDefault)
-    {
-        gCoordinator.init(static_filepath, static_user, static_sshHostname, static_sshUsername, static_sshPassword, static_remoteBaseDir);
-        save_config();
-    }
-    else
-    {
-        gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
-    }
+  if (needToLoadDefault)
+  {
+      gCoordinator.init(static_filepath, static_user, static_sshHostname, static_sshUsername, static_sshPassword, static_remoteBaseDir);
+      save_config();
+  }
+  else
+  {
+      gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
+  }
 
+  int result = 0;
+  if (gOnlyCommandLine)
+  {
+    result = main_console(commandLine);
+  }
+  else
+  {
     SetWindowText(hUserTextbox, gCoordinator.mUser.get_data());
     SetWindowText(hFileTextbox, gCoordinator.mFullLocalPath.get_data());
 
@@ -765,36 +964,62 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     auto nextReserveStatePoll = clock::now() + std::chrono::seconds(1);
     while (poll_win_message(false)) 
     {
-        auto now = clock::now();
-        if (now > nextReserveStatePoll)
-        {
-            nextReserveStatePoll += std::chrono::seconds(1);
-            s64 reservedFileSize;
-            //TODO deal with file not existing
-            reserveState = gCoordinator.get_reserve_state(&reservedFileRemoteOwner, &reservedFileSize);
-            char lblReserveState[BSE_STACK_BUFFER_SMALL];
+      auto now = clock::now();
+      if (now > nextReserveStatePoll)
+      {
+          nextReserveStatePoll = now + std::chrono::seconds(1);
+          s64 reservedFileSize;
+          //TODO deal with file not existing
+          reserveState = gCoordinator.get_reserve_state(&reservedFileRemoteOwner, &reservedFileSize);
+          char lblReserveState[BSE_STACK_BUFFER_SMALL];
+          if (gSimpleGui)
+          {
             if (reserveState == ReserveState::UNKNOWN)
             {
-                string_format(lblReserveState, sizeof(lblReserveState), "File doesn't exist on the server.");
+              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank am Server nicht vorhanden.");
             }
             else if (reserveState == ReserveState::NOT_RESERVED)
             {
-                string_format(lblReserveState, sizeof(lblReserveState), "File not reserved.");
+              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank ist zur bearbeitung freigegeben.");
             }
             else if (reserveState == ReserveState::RESERVED_BY_ME)
             {
-                string_format(lblReserveState, sizeof(lblReserveState), "File reserved by you.");
+              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank in bearbeitung.");
             }
             else if (reserveState == ReserveState::RESERVED_BY_OTHER)
             {
-                s64 ipOffset = reservedFileRemoteOwner.is_empty() ? 0 : string_find_last(reservedFileRemoteOwner.get_data(), ' ') - reservedFileRemoteOwner.get_data();
-                string_format(lblReserveState, sizeof(lblReserveState), "File reserved by '", reservedFileRemoteOwner.str.substr(0,ipOffset).c_str(), "'");
+              s64 ipOffset = reservedFileRemoteOwner.is_empty() ? 0 : string_find_last(reservedFileRemoteOwner.get_data(), ' ') - reservedFileRemoteOwner.get_data();
+              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank wird derzeit von '", reservedFileRemoteOwner.str.substr(0,ipOffset).c_str(), "' bearbeitet.");
             }
+          }
+          else
+          {
+            if (reserveState == ReserveState::UNKNOWN)
+            {
+              string_format(lblReserveState, sizeof(lblReserveState), "File doesn't exist on the server.");
+            }
+            else if (reserveState == ReserveState::NOT_RESERVED)
+            {
+              string_format(lblReserveState, sizeof(lblReserveState), "File not reserved.");
+            }
+            else if (reserveState == ReserveState::RESERVED_BY_ME)
+            {
+              string_format(lblReserveState, sizeof(lblReserveState), "File reserved by you.");
+            }
+            else if (reserveState == ReserveState::RESERVED_BY_OTHER)
+            {
+              s64 ipOffset = reservedFileRemoteOwner.is_empty() ? 0 : string_find_last(reservedFileRemoteOwner.get_data(), ' ') - reservedFileRemoteOwner.get_data();
+              string_format(lblReserveState, sizeof(lblReserveState), "File reserved by '", reservedFileRemoteOwner.str.substr(0,ipOffset).c_str(), "'");
+            }
+          }
 
-            SetWindowText(hReserveStateLabel, lblReserveState);
-        }
+          SetWindowText(hReserveStateLabel, lblReserveState);
+      }
+
+      result = 0;
     }
+  }
 
-    gCoordinator.shutdown_session();
-    return 0;
+  gCoordinator.shutdown_session();
+  return result;
 }

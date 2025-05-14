@@ -3,8 +3,8 @@ IF NOT DEFINED DevEnvDir call shell_win64.bat
 
 set PROJECT_DIR=%~dp0\..
 
-IF %1==debug (
-     set config_options=/Zi /Od
+IF "%1"=="debug" (
+     set config_options=/Zi /Od /DFAC_DEBUG
 ) ELSE set config_options=/Ox
 
 set compiler_options=/I C:\src\include /GR- /EHa- /FC /MT /nologo /volatile:iso /W4 /wd4068 /wd4100 /wd4201 /wd4701 /wd4189 /wd4530 /wd4996 /wd4067 %config_options%

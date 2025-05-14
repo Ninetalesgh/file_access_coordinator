@@ -195,7 +195,7 @@ void AccessCoordinator::on_force_release_dialog_confirm()
 void AccessCoordinator::show_confirmation_dialog(String title, String message, void (AccessCoordinator::*on_confirm)())
 {
 #if defined(FAC_WINGUI)
-  if (mConfirmationDialogCallback)
+  if (mConfirmationDialogCallback && !mAgreeAllPrompts)
   {
     if(mConfirmationDialogCallback(title.get_data(), message.get_data()))
     {
@@ -385,9 +385,9 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
       s64 remoteFileBytes = 0;
       string_parse_value(responseBuffer, &remoteFileBytes);
 #if defined(FAC_WINGUI)
-      log_info("\rProgress: ", remoteFileBytes, "/", localFileSize, " Bytes -- Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
+      log_info("\rProgress: ", remoteFileBytes, "/", localFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
-      std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+      std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
 #endif
       bytesSinceLastSecond = 0;   
     }
@@ -415,7 +415,14 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   int result;
   if (s64(remoteFileSize) == localFileSize)
   {
-    log_info("- Success!");
+#if defined(_WIN32)
+  if (SetFileAttributes(localPath, FILE_ATTRIBUTE_READONLY) == 0)
+  {
+    log_error("- Error setting file readonly.");
+  }
+#endif
+
+    log_info("                         \r\n- Success!\r\n");
     log_info("- Uploaded: ", as_megabytes(localFileSize), " MB");
     result = SSH_OK;
   }
@@ -462,14 +469,13 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     return log_section_exit_return_error();
   }
 
-  FILE* localFile = fopen(localPath, "wb");
-  if (!localFile)
+  #if defined(_WIN32)
+  if (SetFileAttributes(localPath, FILE_ATTRIBUTE_NORMAL) == 0)
   {
-    log_error("- Error opening local file '", localPath, "', are you sure it exists?");
-    sftp_close(remoteFile);
-    sftp_free(sftp);
+    log_error("- Error setting local file writable.");
     return log_section_exit_return_error();
   }
+  #endif
 
   char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
@@ -480,6 +486,21 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   
   s64 remoteFileSize;
   string_parse_value(responseBuffer, &remoteFileSize);
+
+  if (remoteFileSize == 0)
+  {
+    log_info("- Remote file has size 0, local file won't be overwritten.");
+    return log_section_exit_return_error();
+  }
+
+  FILE* localFile = fopen(localPath, "wb");
+  if (!localFile)
+  {
+    log_error("- Error opening local file '", localPath, "', are you sure it exists?");
+    sftp_close(remoteFile);
+    sftp_free(sftp);
+    return log_section_exit_return_error();
+  }
 
   char buffer[BSE_STACK_BUFFER_GARGANTUAN_PLUS];
   int bytesRead;
@@ -506,9 +527,9 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     {
       nextLogClock += std::chrono::seconds(1);
 #if defined(FAC_WINGUI)
-      log_info("\rProgress: ", totalBytesRead, "/", remoteFileSize, " Bytes -- Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
+      log_info("\rProgress: ", totalBytesRead, "/", remoteFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
-  std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes -- Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+  std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
 #endif
 
       bytesSinceLastSecond = 0;
@@ -538,7 +559,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 
   if (s64(remoteFileSize) == localFileSize)
   {
-    log_info("- Success!");
+    log_info("                         \r\n- Success!\r\n");
     log_info("- Downloaded: ", as_megabytes(localFileSize), " MB");
   }
   else
@@ -714,24 +735,28 @@ ReserveState AccessCoordinator::get_reserve_state_of_remote_file(String* outOwne
                "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation')\"; fi"); 
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
 
+  ReserveState result;
   if (responseBuffer[0] == '0')
   {
-    return ReserveState::UNKNOWN;
+    result = ReserveState::UNKNOWN;
   }
   else if (responseBuffer[0] == 'A')
   {
-    return ReserveState::NOT_RESERVED;
+    result = ReserveState::NOT_RESERVED;
   }
   else if (responseBuffer[0] == 'B')
   {
     if(outFileSize && string_length(responseBuffer) > 2) string_parse_value(responseBuffer + 2, outFileSize);
-    return ReserveState::RESERVED_BY_ME;
+    result = ReserveState::RESERVED_BY_ME;
   }
   else if (responseBuffer[0] == 'C')
   {
     if (outOwner && string_length(responseBuffer) > 2) *outOwner = (responseBuffer + 2);
-    return ReserveState::RESERVED_BY_OTHER;
+    result = ReserveState::RESERVED_BY_OTHER;
   }
 
-  return ReserveState::UNKNOWN;
+  int cached = mReservedFileCache.find(filename);
+  if (cached >= 0 && result != ReserveState::RESERVED_BY_ME) mReservedFileCache.remove_at(cached);
+
+  return result;
 }

@@ -120,6 +120,7 @@ namespace bse
           {
             parameters.forwardInstance->mNewLogSignal();
           }
+          std::cout << message << std::flush;
         }
         #endif
       }
@@ -135,6 +136,7 @@ namespace bse
           {
             parameters.forwardInstance->mNewLogSignal();
           }
+          std::cout << message << std::flush;
         }
         #endif
       }
@@ -150,6 +152,7 @@ namespace bse
           {
             parameters.forwardInstance->mNewLogSignal();
           }
+          std::cout << message << std::flush;
         }
         #endif
       }
@@ -165,6 +168,7 @@ namespace bse
           {
             parameters.forwardInstance->mNewLogSignal();
           }
+          std::cout << message << std::flush;
         }
         #endif
       }
