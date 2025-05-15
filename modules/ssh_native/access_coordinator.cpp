@@ -657,7 +657,7 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
                "' && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
-               "then chmod -w '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
+               "then chmod 444 '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
   responseBuffer[0] = '\0';
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
@@ -691,7 +691,7 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
   {
     string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
-               " && chmod +w '", filename, "' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\" && truncate -s 0 '_", filename, "reservation'"); 
+               " && chmod 644 '", filename, "' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\" && truncate -s 0 '_", filename, "reservation'"); 
   }
   else
   {
@@ -699,7 +699,7 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
     string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
                "cd '", remoteBaseDir,
                "' && if grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
-               "then chmod +w '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
+               "then chmod 644 '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
   }
 
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);

@@ -149,6 +149,7 @@ bool save_config()
   return false;
 }
 
+
 bool load_config(std::string& filepath, std::string& user, std::string& sshHostname, std::string& sshUsername, std::string& sshPassword, std::string& remoteBaseDir)
 {
   char const* appData = std::getenv("APPDATA");
@@ -689,7 +690,13 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                         }
                         else
                         {
-                          //don't upload if it's not our file in simple mode, since there's no confirmation dialog
+                          buffer[0] = '\0';
+                          string_format(buffer, sizeof(buffer), "Datenbank\n", gCoordinator.mFullLocalPath.get_data(), "\nist nicht in bearbeitung.");
+                          int confirmOverwrite = MessageBoxA(
+                          hMainWindow,
+                          buffer,
+                          "Datenbank nicht in bearbeitung.",
+                          MB_OK | MB_ICONQUESTION | MB_TOPMOST);
                         }
                       }
                       else
@@ -995,6 +1002,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
       auto now = clock::now();
       if (now > nextReserveStatePoll)
       {
+          load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
+          gCoordinator.mUser = user;
+          gCoordinator.set_filepath(filepath);
+
           nextReserveStatePoll = now + std::chrono::seconds(1);
           s64 reservedFileSize;
           //TODO deal with file not existing
@@ -1012,7 +1023,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
             }
             else if (reserveState == ReserveState::RESERVED_BY_ME)
             {
-              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank in bearbeitung.");
+              string_format(lblReserveState, sizeof(lblReserveState), "Datenbank lokal in bearbeitung.");
             }
             else if (reserveState == ReserveState::RESERVED_BY_OTHER)
             {
