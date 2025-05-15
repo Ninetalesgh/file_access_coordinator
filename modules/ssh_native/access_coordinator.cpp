@@ -407,7 +407,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   std::cout << "\r\n";
 #endif
 
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\" "
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "_PART')\" "
         "&& if [ \"$(stat -c%s '", remotePath, "_PART')\" -eq ", localFileSize, " ]; then mv -f '",remotePath,"_PART' '", remotePath, "'; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   
