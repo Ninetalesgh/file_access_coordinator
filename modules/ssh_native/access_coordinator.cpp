@@ -602,9 +602,8 @@ int AccessCoordinator::create_backup(char const* remoteBaseDir, char const* file
                 "&& cp -r ", remoteBaseDir, "/", filename, " \"$NEW_BACKUP\" "
                 "&& echo \"$NEW_BACKUP\" >> \"$BACKUP_RECORDS_FILE\" "
                 "&& OLDEST_BACKUP=$(head -n 1 \"$BACKUP_RECORDS_FILE\") "
-                "&& if [ $(wc -l < \"$BACKUP_RECORDS_FILE\") -gt ", maxBackupCount, " ]; then rm -rf \"$OLDEST_BACKUP\" && sed -i '1d' \"$BACKUP_RECORDS_FILE\"; fi");
-  log_info(stringFormatBuffer);
-
+                "&& if [ $(wc -l < \"$BACKUP_RECORDS_FILE\") -gt ", maxBackupCount, " ]; then rm -rf \"$OLDEST_BACKUP\" "
+                  "&& sed -i '1d' \"$BACKUP_RECORDS_FILE\"; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
 
@@ -624,10 +623,8 @@ int AccessCoordinator::restore_backup(char const* remoteBaseDir, char const* fil
                 "&& BACKUP_TO_RESTORE=$(sed -n \"${TARGET_LINE}p\" \"$BACKUP_RECORDS_FILE\") "
                 "&& TARGET_FILE=\"", remoteBaseDir, "/", filename, "\" "
                 "&& if [ -f \"$BACKUP_TO_RESTORE\" ]; then cp -f \"$BACKUP_TO_RESTORE\" \"$TARGET_FILE\" "
-                "&& echo \"Replaced $TARGET_FILE with $BACKUP_TO_RESTORE\"; "
-                " else echo \"Backup $BACKUP_TO_RESTORE doesn't exist\"; fi "
-                );
-
+                  "&& echo \"Replaced $TARGET_FILE with $BACKUP_TO_RESTORE\"; "
+                  " else echo \"Backup $BACKUP_TO_RESTORE doesn't exist\"; fi ");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
   return SSH_OK;
