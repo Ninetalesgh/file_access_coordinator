@@ -15,7 +15,7 @@ struct String {
   String const& utf8() const { return *this; }
   char const* get_data() const { return str.c_str(); }
   bool is_empty() { return str.empty(); }
-  String get_file() 
+  String get_file()
   {
     auto pos = str.find_last_of("/\\");
     if (pos != std::string::npos)
@@ -50,7 +50,7 @@ struct String {
 
 template<typename T> struct Vector {
   int find(T const& obj)
-  { 
+  {
     auto it = std::find(vec.begin(), vec.end(), obj);
     if (it == vec.end()) return -1;
     else return (int)std::distance(vec.begin(), it);
@@ -88,24 +88,25 @@ enum class DiffState : int
 class AccessCoordinator {
 #else
 class AccessCoordinator : public Node {
-	GDCLASS(AccessCoordinator, Node)
+  GDCLASS(AccessCoordinator, Node)
 #endif
 protected:
-	static void _bind_methods();
+  static void _bind_methods();
 
-public: 
+public:
   bool set_filepath(String filepath);
   bool init(String filepath, String user, String sshHostname, String sshUsername, String sshPassword, String remoteBaseDir);
   bool reserve();
   bool download();
   bool upload();
+  bool rollback(int stepsBack);
   bool release(bool overridePermissions = false);
   ReserveState get_reserve_state(String* outOwner, s64* outFileSize);
   String fetch_output();
   String output;
 
   int shutdown_session();
-  
+
   void on_download_dialog_confirm();
   void on_upload_dialog_confirm();
   void on_force_release_dialog_confirm();
@@ -118,7 +119,7 @@ public:
 
   template<typename... Args> int request_exec_format(Args... args)
   {
-    char debugBuffer[BSE_STACK_BUFFER_LARGE]; 
+    char debugBuffer[BSE_STACK_BUFFER_LARGE];
     s32 bytesToWrite = string_format( debugBuffer, BSE_STACK_BUFFER_LARGE - 2, args... ) - 1 /* ommit null */;
     if ( bytesToWrite > 0 )
     {
@@ -131,10 +132,13 @@ public:
 
   int log_section_exit_return_error();
   int _init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword);
-  
+
   int upload_file(const char* localPath, char const* remotePath);
+  int create_backup(char const* remoteBaseDir, char const* filename, int maxBackupCount);
 
   int download_file(char const* localPath, char const* remotePath);
+
+  int restore_backup(char const* remoteBaseDir, char const* filename, int backupSteps);
 
   int reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp);
 

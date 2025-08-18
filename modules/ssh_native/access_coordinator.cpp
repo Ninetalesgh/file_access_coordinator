@@ -6,8 +6,8 @@
 #include <chrono>
 
 #ifndef S_IRUSR
-#define	S_IRUSR	0400
-#define	S_IWUSR	0200
+#define  S_IRUSR  0400
+#define  S_IWUSR  0200
 #endif
 
 void AccessCoordinator::_bind_methods()
@@ -57,7 +57,7 @@ bool AccessCoordinator::download()
 
   if(SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
   {
-    return false; 
+    return false;
   }
 
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
@@ -88,6 +88,16 @@ bool AccessCoordinator::upload()
   {
     string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "You did not reserve '", mFilename.utf8().get_data(), "' this session,\n are you sure you want to attempt to overwrite the file on the server?");
     show_confirmation_dialog("Initiating Upload", stringFormatBuffer, &AccessCoordinator::on_upload_dialog_confirm);
+  }
+
+  return true;
+}
+
+bool AccessCoordinator::rollback(int stepsBack)
+{
+  if (SSH_OK != restore_backup(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), stepsBack))
+  {
+    return false;
   }
 
   return true;
@@ -132,12 +142,12 @@ bool AccessCoordinator::set_filepath(String filepath)
 }
 
 bool AccessCoordinator::init(String filepath, String user, String sshHostname, String sshUsername, String sshPassword, String remoteBaseDir)
-{ 
+{
   if (mSession)
   {
     shutdown_session();
   }
-  
+
   mFullLocalPath = filepath;
   mFilename = mFullLocalPath.get_file();
 
@@ -146,7 +156,7 @@ bool AccessCoordinator::init(String filepath, String user, String sshHostname, S
   mSshHostname = sshHostname;
   mSshPassword = sshPassword;
   mRemoteBaseDir = remoteBaseDir;
-  
+
   char fullRemotePath[BSE_STACK_BUFFER_SMALL];
   string_format(fullRemotePath, sizeof(fullRemotePath), mRemoteBaseDir.utf8().get_data(), "/", mFilename.utf8().get_data());
   mFullRemotePath = fullRemotePath;
@@ -176,12 +186,17 @@ void AccessCoordinator::on_upload_dialog_confirm()
 {
   if (SSH_OK != reserve_remote_file_for_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress))
   {
-    return; 
+    return;
   }
 
   if (SSH_OK != upload_file(mFullLocalPath.utf8().get_data(), mFullRemotePath.utf8().get_data()))
   {
     return;
+  }
+
+  if (SSH_OK != create_backup(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), 5))
+  {
+    log_error("Creating backup failed");
   }
 
   release_remote_file_from_local_user(mRemoteBaseDir.utf8().get_data(), mFilename.utf8().get_data(), mUser.utf8().get_data(), mIpAddress, false);
@@ -259,10 +274,10 @@ int AccessCoordinator::request_exec(ssh_session session, char const* request, ch
     return SSH_ERROR;
   }
 
-  rc = ssh_channel_request_exec(channel, request); 
+  rc = ssh_channel_request_exec(channel, request);
   if (rc != SSH_OK)
   {
-    log_error("Error on request: ", request); 
+    log_error("Error on request: ", request);
     ssh_channel_close(channel);
     ssh_channel_free(channel);
     return SSH_ERROR;
@@ -275,14 +290,14 @@ int AccessCoordinator::request_exec(ssh_session session, char const* request, ch
 
   if(sizeLeft > 0) ptr[0] = '\0';
 
-  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 1)) > 0) 
+  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 1)) > 0)
   {
     if (outputToStandardOut) fwrite(ptr, 1, bytesRead, stderr);
     ptr += bytesRead;
     sizeLeft -= bytesRead;
   }
 
-  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 0)) > 0) 
+  while ((bytesRead = ssh_channel_read(channel, ptr, sizeLeft, 0)) > 0)
   {
     if (outputToStandardOut) fwrite(ptr, 1, bytesRead, stdout);
     ptr += bytesRead;
@@ -310,6 +325,7 @@ int AccessCoordinator::log_section_exit_return_error()
   log_info("==============================================\n");
   return SSH_ERROR;
 }
+
 
 int AccessCoordinator::upload_file(const char* localPath, char const* remotePath)
 {
@@ -392,9 +408,9 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
 #if defined(FAC_WINGUI)
       log_info("\rProgress: ", remoteFileBytes, "/", localFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
-      std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+      std::cout << "\rProgress: " << remoteFileBytes << "/" << localFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;
 #endif
-      bytesSinceLastSecond = 0;  
+      bytesSinceLastSecond = 0;
       #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
       mWindowMessageCallback(true);
       #endif
@@ -410,7 +426,7 @@ int AccessCoordinator::upload_file(const char* localPath, char const* remotePath
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "_PART')\" "
         "&& if [ \"$(stat -c%s '", remotePath, "_PART')\" -eq ", localFileSize, " ]; then mv -f '",remotePath,"_PART' '", remotePath, "'; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
-  
+
   s64 remoteFileSize;
   string_parse_value(responseBuffer, &remoteFileSize);
 
@@ -446,7 +462,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 {
   log_info("\n==============================================");
   log_info("--- Downloading File -------------------------");
-  
+
   log_info("- Attempting to download '", remotePath, "' as '", localPath, "'");
 
   sftp_session sftp = sftp_new(mSession);
@@ -462,7 +478,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
     sftp_free(sftp);
     return log_section_exit_return_error();
   }
-  
+
   char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
   char responseBuffer[BSE_STACK_BUFFER_SMALL];
   responseBuffer[0] = '\0';
@@ -486,7 +502,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo \"$(stat -c%s '", remotePath, "')\"");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
-  
+
   s64 remoteFileSize;
   string_parse_value(responseBuffer, &remoteFileSize);
 
@@ -531,7 +547,7 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
 #if defined(FAC_WINGUI)
       log_info("\rProgress: ", totalBytesRead, "/", remoteFileSize, " Bytes                Speed: ", as_megabytes(bytesSinceLastSecond), " MB/s");
 #else
-  std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;   
+  std::cout << "\rProgress: " << totalBytesRead << "/" << remoteFileSize << " Bytes                Speed: " << as_megabytes(bytesSinceLastSecond) << " MB/s" << std::flush;
 #endif
       #if defined(FAC_WINGUI) && defined(POLL_WINDOWS_IN_SFTP_THREAD)
       mWindowMessageCallback(true);
@@ -573,6 +589,50 @@ int AccessCoordinator::download_file(char const* localPath, char const* remotePa
   return bytesRead < 0 ? SSH_ERROR : SSH_OK;
 }
 
+int AccessCoordinator::create_backup(char const* remoteBaseDir, char const* filename, int maxBackupCount)
+{
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "export TZ='Europe/Vienna' "
+                "&& NEW_BACKUP=", remoteBaseDir, "/backup/_", filename, "_$(date +\"%Y_%m_%d_%H_%M_%S\") "
+                "&& BACKUP_RECORDS_FILE=", remoteBaseDir, "/backup/_", filename, "_backup_record "
+                "&& mkdir -p ", remoteBaseDir, "/backup "
+                "&& cp -r ", remoteBaseDir, "/", filename, " \"$NEW_BACKUP\" "
+                "&& echo \"$NEW_BACKUP\" >> \"$BACKUP_RECORDS_FILE\" "
+                "&& OLDEST_BACKUP=$(head -n 1 \"$BACKUP_RECORDS_FILE\") "
+                "&& if [ $(wc -l < \"$BACKUP_RECORDS_FILE\") -gt ", maxBackupCount, " ]; then rm -rf \"$OLDEST_BACKUP\" && sed -i '1d' \"$BACKUP_RECORDS_FILE\"; fi");
+  log_info(stringFormatBuffer);
+
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  log_info(responseBuffer);
+
+  return SSH_OK;
+}
+
+int AccessCoordinator::restore_backup(char const* remoteBaseDir, char const* filename, int backupSteps)
+{
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_SMALL];
+  responseBuffer[0] = '\0';
+
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "export TZ='Europe/Vienna' "
+                "&& BACKUP_RECORDS_FILE=", remoteBaseDir, "/backup/_", filename, "_backup_record "
+                "&& LINE_COUNT=$(wc -l < \"$BACKUP_RECORDS_FILE\") "
+                "&& TARGET_LINE=$((LINE_COUNT - ", backupSteps, ")) "
+                "&& BACKUP_TO_RESTORE=$(sed -n \"${TARGET_LINE}p\" \"$BACKUP_RECORDS_FILE\") "
+                "&& TARGET_FILE=\"", remoteBaseDir, "/", filename, "\" "
+                "&& if [ -f \"$BACKUP_TO_RESTORE\" ]; then cp -f \"$BACKUP_TO_RESTORE\" \"$TARGET_FILE\" "
+                "&& echo \"Replaced $TARGET_FILE with $BACKUP_TO_RESTORE\"; "
+                " else echo \"Backup $BACKUP_TO_RESTORE doesn't exist\"; fi "
+                );
+
+  request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
+  log_info(responseBuffer);
+  return SSH_OK;
+}
+
 int AccessCoordinator::_init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword)
 {
   log_info("\n==============================================");
@@ -606,11 +666,11 @@ int AccessCoordinator::_init(char const* user, char const* sshUser, char const* 
     mSession = nullptr;
     return log_section_exit_return_error();
   }
-  
+
   char stringFormatBuffer[BSE_STACK_BUFFER_LARGE];
   char responseBuffer[256];
   responseBuffer[0] = '\0';
-  
+
   string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "echo $SSH_CONNECTION | awk '{print $1}'");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   string_copy(mIpAddress, responseBuffer, sizeof(mIpAddress));
@@ -649,15 +709,15 @@ int AccessCoordinator::reserve_remote_file_for_local_user( char const* remoteBas
   stringFormatBuffer[0] = '\0';
   // With 'examplefile' this will create an '_examplefilereservation' and enter the username and ip to reserve.
   // If 'examplefile' has write permission and '_examplefilereservation' is empty, we can reserve it.
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer),
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
                " && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
                 "then echo \"", user, " ", myIp ,"\" > '_", filename,"reservation'; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer));
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer),
                "cd '", remoteBaseDir,
                "' && if [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
-               "then chmod 444 '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi"); 
+               "then chmod 444 '", filename, "' && echo \"- Successfully reserved '", filename, "'!\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; then echo \"- File '", filename, "' is already reserved by you.\"; else echo \"- Can't reserve file '", filename, "', it's already reserved by '$(cat '_", filename, "reservation')'\"; fi");
   responseBuffer[0] = '\0';
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
@@ -689,17 +749,17 @@ int AccessCoordinator::release_remote_file_from_local_user( char const* remoteBa
 
   if (overridePermissions)
   {
-    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer),
                "cd '", remoteBaseDir, "' && touch '", filename, "' && touch '_", filename, "reservation'"
-               " && chmod 644 '", filename, "' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\" && truncate -s 0 '_", filename, "reservation'"); 
+               " && chmod 644 '", filename, "' && echo \"- Force releasing '", filename, "' from '$(cat \"_", filename, "reservation\")'\" && truncate -s 0 '_", filename, "reservation'");
   }
   else
   {
     log_info("- Attempting to release '", remoteBaseDir, "/", filename, "' from user '", user, "' with ip '", myIp, "'");
-    string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+    string_format(stringFormatBuffer, sizeof(stringFormatBuffer),
                "cd '", remoteBaseDir,
                "' && if grep -q \"", user, " ", myIp , "\" '_", filename, "reservation'; "
-               "then chmod 644 '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi"); 
+               "then chmod 644 '", filename, "' && truncate -s 0 '_", filename, "reservation' && echo \"- Successfully released '", filename, "'!\"; else echo \"- File '", filename, "' is reserved by '$(cat \"_", filename, "reservation\")', you don't have permission to release it\"; fi");
   }
 
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
@@ -725,11 +785,11 @@ ReserveState AccessCoordinator::get_reserve_state_of_remote_file(String* outOwne
   //A = free
   //B = owned by me followed by the size of the file on the server
   //C = owned by other followed by the name and ip of the owner
-  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), 
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer),
                "cd '", remoteBaseDir,
                "' && if [ ! -f ", filename, " ]; then echo \"0\"; elif [ \"$(stat -c%a '", filename, "')\" -eq 644 ] && [ \"$(stat -c%s '_", filename, "reservation')\" -eq 0 ]; "
-               "then echo \"A\"; elif grep -q \"", user, " ", myIp , "\" '_", filename, 
-               "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation')\"; fi"); 
+               "then echo \"A\"; elif grep -q \"", user, " ", myIp , "\" '_", filename,
+               "reservation'; then echo \"B $(stat -c%s '", filename, "')\"; else echo \"C $(cat '_", filename, "reservation')\"; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
 
   ReserveState result;

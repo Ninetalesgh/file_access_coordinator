@@ -32,7 +32,7 @@ bool ensure_path_exists(fs::path const& path)
       return false;
     }
   }
-  
+
   return true;
 }
 
@@ -172,6 +172,23 @@ int evaluate_expression(char const* expression)
     print_time();
     coordinator.upload();
   }
+  else if (string_begins_with(expression, "rollback"))
+  {
+    std::string input;
+    {
+      std::cout << "How many versions back do you want to go? (0 to 4): ";
+      std::getline(std::cin, input);
+    }
+    if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit))
+    {
+      int stepsBack = std::clamp(std::stoi(input), 0, 4);
+      coordinator.rollback(stepsBack);
+    }
+    else
+    {
+      log_info("Aborting rollback.");
+    }
+  }
   else if (string_begins_with(expression, "reserve"))
   {
     print_time();
@@ -247,7 +264,7 @@ int evaluate_expression(char const* expression)
   }
   else if (string_begins_with(expression, "agreeall"))
   {
-    coordinator.mAgreeAllPrompts = true; 
+    coordinator.mAgreeAllPrompts = true;
   }
   else
   {
@@ -261,6 +278,7 @@ int evaluate_expression(char const* expression)
              "reserve -> Explicitly reserve the remote file for your current user and IP without otherwise manipulating files.\n"
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
              "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
+             "rollback -> Overwrites the main file with one of the available backup files.\n"
              "----------------------------------------------\n"
              "--- Local & Config Commands ------------------\n"
              "show -> Shows current context user and filepath.\n"

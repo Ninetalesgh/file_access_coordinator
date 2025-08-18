@@ -102,7 +102,7 @@ bool ensure_path_exists(fs::path const& path)
       return false;
     }
   }
-  
+
   return true;
 }
 
@@ -230,6 +230,23 @@ int evaluate_expression(char const* expression)
     print_time();
     gCoordinator.upload();
   }
+  else if (string_begins_with(expression, "rollback"))
+  {
+    std::string input;
+    {
+      std::cout << "How many versions back do you want to go? (0 to 4): ";
+      std::getline(std::cin, input);
+    }
+    if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit))
+    {
+      int stepsBack = std::clamp(std::stoi(input), 0, 4);
+      gCoordinator.rollback(stepsBack);
+    }
+    else
+    {
+      log_info("Aborting rollback.");
+    }
+  }
   else if (string_begins_with(expression, "reserve"))
   {
     print_time();
@@ -293,7 +310,7 @@ int evaluate_expression(char const* expression)
     std::string remoteBaseDir;
     if (load_config(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir))
     {
-      gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);  
+      gCoordinator.init(filepath, user, sshHostname, sshUsername, sshPassword, remoteBaseDir);
       std::cout << "Loaded access.config from disk.\n";
       print_current_context();
     }
@@ -312,7 +329,7 @@ int evaluate_expression(char const* expression)
   }
   else if (string_begins_with(expression, "agreeall"))
   {
-    gCoordinator.mAgreeAllPrompts = true; 
+    gCoordinator.mAgreeAllPrompts = true;
   }
   else
   {
@@ -326,6 +343,7 @@ int evaluate_expression(char const* expression)
              "reserve -> Explicitly reserve the remote file for your current user and IP without otherwise manipulating files.\n"
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
              "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
+             "rollback -> Overwrites the main file with one of the available backup files.\n"
              "----------------------------------------------\n"
              "--- Local & Config Commands ------------------\n"
              "show -> Shows current context user and filepath.\n"
@@ -410,7 +428,7 @@ char const* get_button_text(int buttonId)
 #define COLUMN_0_WIDTH 250
 #define ROW_0_HEIGHT 30
 #else
-#define COLUMN_0_WIDTH 100 
+#define COLUMN_0_WIDTH 100
 #define ROW_0_HEIGHT 20
 #endif
 #define COLUMN_1_WIDTH 40
@@ -464,7 +482,7 @@ bool reservedFileExistsLocally = true;
 bool reservedFileSizeDifferent = false;
 String reservedFileRemoteOwner;
 
-LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
+LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch(uMsg)
     {
@@ -474,7 +492,7 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         DeleteObject(hButtonBrush);
         PostQuitMessage(0);
         return 0;
-    case WM_PAINT: 
+    case WM_PAINT:
     {
       PAINTSTRUCT ps;
       HDC hdc = BeginPaint(hwnd, &ps);
@@ -482,15 +500,15 @@ LRESULT CALLBACK window_proc_essentials(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
       SetBkColor(hdc, windowBkColor);
       if (!gSimpleGui)
       {
-        
+
         char const* lblUser = "User: ";
         char const* lblFile = "File: ";
         RECT rectRow0 = { COLUMN_1_OFFSET, ROW_0_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_0_OFFSET + ROW_0_HEIGHT };
         RECT rectRow1 = { COLUMN_1_OFFSET, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_1_WIDTH, ROW_1_OFFSET + ROW_1_HEIGHT };
-        
+
         DrawText(hdc, lblUser, -1, &rectRow0, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
         DrawText(hdc, lblFile, -1, &rectRow1, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
-        
+
       }
       EndPaint(hwnd, &ps);
       return 0;
@@ -553,7 +571,7 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
     hReserveStateLabel = CreateWindow(
       "STATIC",
       "",
-      WS_VISIBLE | WS_CHILD,            
+      WS_VISIBLE | WS_CHILD,
       COLUMN_0_OFFSET + UI_PADDING, ROW_1_OFFSET, COLUMN_1_OFFSET + COLUMN_0_WIDTH, ROW_1_HEIGHT,
       hwnd,
       (HMENU)HwndId::Label_ReserveState,
@@ -612,16 +630,16 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
         COLUMN_3_OFFSET, ROW_1_OFFSET, COLUMN_3_WIDTH, ROW_1_HEIGHT,
         hwnd, (HMENU)HwndId::Button_OpenFile, ((LPCREATESTRUCT)lParam)->hInstance, NULL
     );
-    
+
     //TEXT FIELDS
     hUserTextbox = CreateWindowEx(
-        0, "EDIT", gCoordinator.mUser.get_data(), 
+        0, "EDIT", gCoordinator.mUser.get_data(),
         WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT,
         COLUMN_2_OFFSET, ROW_0_OFFSET, COLUMN_2_WIDTH, ROW_0_HEIGHT,  // x, y, width, height
         hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
     );
     hFileTextbox = CreateWindowEx(
-        0, "EDIT", gCoordinator.mFullLocalPath.get_data(), 
+        0, "EDIT", gCoordinator.mFullLocalPath.get_data(),
         WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL,
         COLUMN_2_OFFSET, ROW_1_OFFSET, COLUMN_2_WIDTH, ROW_1_HEIGHT,  // x, y, width, height
         hwnd, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL
@@ -631,7 +649,7 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
         WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY,
         COLUMN_0_OFFSET, ROW_2_OFFSET, WINDOW_WIDTH, ROW_2_HEIGHT,
         hwnd, (HMENU)HwndId::Text_Output, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-    
+
     //FONT
     hOutputFont = CreateFont(
         -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
@@ -644,7 +662,7 @@ void create_gui(HWND hwnd, WPARAM wParam, LPARAM lParam)
     hReserveStateLabel = CreateWindow(
     "STATIC",
     "",
-    WS_VISIBLE | WS_CHILD,            
+    WS_VISIBLE | WS_CHILD,
     COLUMN_0_OFFSET, ROW_3_OFFSET,
     COLUMN_3_OFFSET - 2 * COLUMN_1_OFFSET - 4 * UI_PADDING, ROW_3_HEIGHT,
     hwnd,
@@ -686,7 +704,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                       {
                         if (reserveState == ReserveState::UNKNOWN || reserveState == ReserveState::RESERVED_BY_ME)
                         {
-                          gCoordinator.upload();                          
+                          gCoordinator.upload();
                         }
                         else
                         {
@@ -723,7 +741,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                       {
                         gCoordinator.download();
                       }
-                      
+
                       break;
                     }
                     case (int)HwndId::Button_Reserve:
@@ -776,7 +794,7 @@ bool poll_win_message(bool onlyEssentials)
     gOnlyProcEssentials = onlyEssentials;
     MSG msg = {};
     if (GetMessage(&msg, NULL, 0, 0)) {
-       
+
         TranslateMessage(&msg);
         DispatchMessage(&msg);
         return true;
@@ -815,12 +833,12 @@ void fetch_new_log_callback()
       {
         lastNewlineIndex = len + int(last - log);
       }
-      
+
       if (overwriteLastLine)
       {
         start = lastNewlineIndex + 1;
       }
-      
+
       SendMessage(hOutputTextbox, EM_SETSEL, start, len);
       SendMessage(hOutputTextbox, EM_REPLACESEL, FALSE, (LPARAM)log);
     }
@@ -877,14 +895,14 @@ int main_console(LPSTR commandLine)
     char* argv[128];
     char buffer[BSE_STACK_BUFFER_MEDIUM];
     int bytesWritten = 0;
-    for (int i = 0; i < argc; ++i) 
+    for (int i = 0; i < argc; ++i)
     {
       argv[i] = buffer + bytesWritten;
       bytesWritten += WideCharToMultiByte(CP_ACP, 0, argvW[i], -1, buffer + bytesWritten, sizeof(buffer) - bytesWritten, NULL, NULL);
     }
 
     LocalFree(argvW);
-    
+
     for (int i = 1; i < argc; ++i)
     {
       if (!evaluate_expression(argv[i])) gRunning = false;
@@ -897,7 +915,7 @@ int main_console(LPSTR commandLine)
   return 1;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdShow) 
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdShow)
 {
   gCoordinator.mConfirmationDialogCallback = &confirm_dialog_callback;
 
@@ -959,7 +977,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
         WS_OVERLAPPEDWINDOW,        // Window style
         // Position and size
         CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
-        NULL,       // Parent window    
+        NULL,       // Parent window
         NULL,       // Menu
         hInstance,  // Instance handle
         NULL        // Additional app data
@@ -997,7 +1015,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR commandLine, int nCmdSh
     // Main message loop
     using clock = std::chrono::steady_clock;
     auto nextReserveStatePoll = clock::now() + std::chrono::seconds(1);
-    while (poll_win_message(false)) 
+    while (poll_win_message(false))
     {
       auto now = clock::now();
       if (now > nextReserveStatePoll)

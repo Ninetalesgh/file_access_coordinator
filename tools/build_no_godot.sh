@@ -9,20 +9,20 @@ OUT_PATH="$PROJECT_DIR/export/fac_cli"
 
 PLATFORM=""
 if [[ "$(uname)" =~ ^Linux$ ]]; then
-	PLATFORM="linux"
+  PLATFORM="linux"
 else
-	PLATFORM="windows"
+  PLATFORM="windows"
 fi
 
 INCLUDE_AND_LIBS=""
 
 if [ "$PLATFORM" = "windows" ]; then
-	OUT_PATH="$OUT_PATH.exe"
-	INCLUDE_AND_LIBS="-I/c/src/include -L/c/src/lib/libssh -lssh.lib"
-	echo "NO WINDOWS"
-	exit 1
+  OUT_PATH="$OUT_PATH.exe"
+  INCLUDE_AND_LIBS="-I/c/src/include -L/c/src/lib/libssh -lssh.lib"
+  echo "NO WINDOWS"
+  exit 1
 elif [ "$PLATFORM" = "linux" ]; then
-	INCLUDE_AND_LIBS="-I/usr/include -lssh"
+  INCLUDE_AND_LIBS="-I/usr/include -lssh"
 fi
 
 g++ "$MAIN_PATH" -o "$OUT_PATH" -I/usr/include -lssh
