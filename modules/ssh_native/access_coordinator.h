@@ -134,14 +134,12 @@ public:
   int _init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword);
 
   int upload_file(const char* localPath, char const* remotePath);
-  int create_backup(char const* remoteBaseDir, char const* filename, int maxBackupCount);
-
   int download_file(char const* localPath, char const* remotePath);
 
+  int create_backup(char const* remoteBaseDir, char const* filename, int maxBackupCount);
   int restore_backup(char const* remoteBaseDir, char const* filename, int backupSteps);
 
   int reserve_remote_file_for_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp);
-
   int release_remote_file_from_local_user( char const* remoteBaseDir, char const* filename, char const* user, char const* myIp, bool overridePermissions = false);
 
   ReserveState get_reserve_state_of_remote_file(String* outOwner, s64* outFileSize, char const* remoteBaseDir, char const* filename, char const* user, char const* myIp);

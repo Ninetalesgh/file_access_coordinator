@@ -620,15 +620,16 @@ int AccessCoordinator::restore_backup(char const* remoteBaseDir, char const* fil
                 "&& BACKUP_RECORDS_FILE=", remoteBaseDir, "/backup/_", filename, "_backup_record "
                 "&& LINE_COUNT=$(wc -l < \"$BACKUP_RECORDS_FILE\") "
                 "&& TARGET_LINE=$((LINE_COUNT - ", backupSteps, ")) "
-                "&& BACKUP_TO_RESTORE=$(sed -n \"${TARGET_LINE}p\" \"$BACKUP_RECORDS_FILE\") "
+                "&& if ((", backupSteps, " >= LINE_COUNT)); then echo \"Backup this far back doesn't exist yet.\"; else BACKUP_TO_RESTORE=$(sed -n \"${TARGET_LINE}p\" \"$BACKUP_RECORDS_FILE\") "
                 "&& TARGET_FILE=\"", remoteBaseDir, "/", filename, "\" "
                 "&& if [ -f \"$BACKUP_TO_RESTORE\" ]; then cp -f \"$BACKUP_TO_RESTORE\" \"$TARGET_FILE\" "
-                  "&& echo \"Replaced $TARGET_FILE with $BACKUP_TO_RESTORE\"; "
-                  " else echo \"Backup $BACKUP_TO_RESTORE doesn't exist\"; fi ");
+                  "&& echo \"Replaced '$TARGET_FILE' with '$BACKUP_TO_RESTORE'\"; "
+                  " else echo \"Backup '$BACKUP_TO_RESTORE' doesn't exist, aborting.\"; fi; fi");
   request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false);
   log_info(responseBuffer);
   return SSH_OK;
 }
+
 
 int AccessCoordinator::_init(char const* user, char const* sshUser, char const* sshHost, char const* sshPassword)
 {
