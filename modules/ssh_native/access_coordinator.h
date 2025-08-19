@@ -100,6 +100,7 @@ public:
   bool download();
   bool upload();
   bool rollback(int stepsBack);
+  bool show_backups();
   bool release(bool overridePermissions = false);
   ReserveState get_reserve_state(String* outOwner, s64* outFileSize);
   String fetch_output();

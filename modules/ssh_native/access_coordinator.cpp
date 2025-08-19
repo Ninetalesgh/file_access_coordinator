@@ -103,6 +103,37 @@ bool AccessCoordinator::rollback(int stepsBack)
   return true;
 }
 
+bool AccessCoordinator::show_backups()
+{
+  char stringFormatBuffer[BSE_STACK_BUFFER_SMALL];
+  char responseBuffer[BSE_STACK_BUFFER_MEDIUM];
+  responseBuffer[0] = '\0';
+  responseBuffer[BSE_STACK_BUFFER_MEDIUM -1] = '\0';
+  string_format(stringFormatBuffer, sizeof(stringFormatBuffer), "export TZ='Europe/Vienna' "
+                "&& BACKUP_RECORDS_FILE=", mRemoteBaseDir.utf8().get_data(), "/backup/_", mFilename.utf8().get_data(), "_backup_record "
+                "&& cat $BACKUP_RECORDS_FILE");
+  if (SSH_OK != request_exec(mSession, stringFormatBuffer, responseBuffer, sizeof(responseBuffer), false))
+  {
+    log_info("AccessCoordinator::show_backups() - Error on request exec.");
+    return false;
+  }
+
+  std::vector<char const*> lines;
+  char* line = responseBuffer;
+  while (*line != '\0')
+  {
+    lines.push_back(line);
+    while (*line != '\0' && *line != '\n') ++line;
+    if (*line == '\n') *line++ = '\0';
+  }
+
+  for (int i = 0; i < lines.size(); ++i)
+  {
+    log_info("Backup ", i, ": ", lines[lines.size() - 1 - i]);
+  }
+  return true;
+}
+
 bool AccessCoordinator::release(bool overridePermission)
 {
   if (!mSession)
