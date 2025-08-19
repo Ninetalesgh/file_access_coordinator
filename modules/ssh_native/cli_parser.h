@@ -32,7 +32,7 @@ void print_current_context(AccessCoordinator& coordinator)
 
 int evaluate_expression(char const* expression, AccessCoordinator& coordinator)
 {
-  if (string_begins_with(expression, "showbackups"))
+  if (string_begins_with(expression, "showbackup"))
   {
     coordinator.show_backups();
   }
@@ -168,7 +168,7 @@ int evaluate_expression(char const* expression, AccessCoordinator& coordinator)
              "release -> Explicitly release the remote file so other people can access it without otherwise manipulating files.\n"
              "forcerelease -> Force release the remote file, no matter who currently has it reserved.\n"
              "rollback -> Overwrites the main file with one of the available backup files.\n"
-             "showbackups -> Lists currently available backups.\n"
+             "showbackup -> Lists currently available backups.\n"
              "----------------------------------------------\n"
              "--- Local & Config Commands ------------------\n"
              "version -> Shows current version of the fac.\n"
