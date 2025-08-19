@@ -1,5 +1,6 @@
 #define NO_GODOT
 
+#include "access_coordinator.cpp"
 #include "cli_parser.h"
 
 #include "default_access.h"

@@ -3,7 +3,7 @@
 
 #define POLL_WINDOWS_IN_SFTP_THREAD
 
-#include "cli_parser.h"
+#include "access_coordinator.cpp"
 
 #include <windows.h>
 #include <uxtheme.h>
@@ -44,6 +44,7 @@ bool gSimpleGui = false;
 #define log_warning( ... ) bse::debug::log(bse::debug::LogParameters(&gCoordinator, bse::debug::LogSeverity::BSE_LOG_SEVERITY_WARNING, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 #define log_error( ... ) bse::debug::log(bse::debug::LogParameters(&gCoordinator, bse::debug::LogSeverity::BSE_LOG_SEVERITY_ERROR, bse::debug::LogOutputType::ALL), __VA_ARGS__)
 
+#include "cli_parser.h"
 
 namespace fs = std::filesystem;
 

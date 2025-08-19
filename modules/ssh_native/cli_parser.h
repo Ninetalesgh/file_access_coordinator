@@ -1,6 +1,6 @@
 #pragma once
 
-#include "access_coordinator.cpp"
+#include "access_coordinator.h"
 #include <filesystem>
 #include <cstdlib>
 #include <fstream>
