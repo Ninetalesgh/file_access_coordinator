@@ -750,7 +750,7 @@ int main_console(LPSTR commandLine)
 
     for (int i = 1; i < argc; ++i)
     {
-      if (!evaluate_expression(argv[i]), gCoordinator) gRunning = false;
+      if (!evaluate_expression(argv[i], gCoordinator)) gRunning = false;
     }
 
     loop_wait_for_expression();
